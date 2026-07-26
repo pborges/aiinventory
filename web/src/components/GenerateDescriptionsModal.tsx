@@ -6,6 +6,7 @@ const POLL_INTERVAL_MS = 1000
 interface Row {
   itemId: number
   assetTag: string
+  primaryImageId?: number
   status: DescriptionBatchItem['status']
   description: string
   error: string
@@ -28,7 +29,14 @@ interface Props {
  */
 export function GenerateDescriptionsModal({ items, onClose, onComplete }: Props) {
   const [rows, setRows] = useState<Row[]>(
-    items.map((it) => ({ itemId: it.id, assetTag: it.asset_tag, status: 'pending', description: '', error: '' })),
+    items.map((it) => ({
+      itemId: it.id,
+      assetTag: it.asset_tag,
+      primaryImageId: it.primary_image_id,
+      status: 'pending',
+      description: '',
+      error: '',
+    })),
   )
   const [hints, setHints] = useState<Record<number, string>>({})
   const [individuallyBusy, setIndividuallyBusy] = useState<Set<number>>(new Set())
@@ -122,30 +130,39 @@ export function GenerateDescriptionsModal({ items, onClose, onComplete }: Props)
         <ul class="generate-descriptions-list">
           {rows.map((row) => (
             <li class="generate-descriptions-row" key={row.itemId}>
-              <div class="generate-descriptions-row-header">
-                <span class="generate-descriptions-tag">{row.assetTag}</span>
-                <span class={`generate-descriptions-status generate-descriptions-status-${row.status}`}>
-                  {row.status}
-                </span>
+              <div class="generate-descriptions-thumb">
+                {row.primaryImageId ? (
+                  <img src={`/api/images/${row.primaryImageId}`} alt={row.assetTag} />
+                ) : (
+                  <div class="item-card-thumb-placeholder">{row.assetTag}</div>
+                )}
               </div>
-              <p class="generate-descriptions-description">
-                {row.status === 'error' ? row.error : row.description || <em>—</em>}
-              </p>
-              <div class="generate-descriptions-row-actions">
-                <input
-                  type="text"
-                  class="generate-descriptions-hint"
-                  placeholder={'Optional hint (e.g. "blue enclosure")'}
-                  value={hints[row.itemId] ?? ''}
-                  onInput={(e) => setHints({ ...hints, [row.itemId]: (e.target as HTMLInputElement).value })}
-                />
-                <button
-                  type="button"
-                  onClick={() => onRegenerateOne(row.itemId)}
-                  disabled={individuallyBusy.has(row.itemId)}
-                >
-                  {individuallyBusy.has(row.itemId) ? 'Regenerating…' : 'Regenerate'}
-                </button>
+              <div class="generate-descriptions-row-body">
+                <div class="generate-descriptions-row-header">
+                  <span class="generate-descriptions-tag">{row.assetTag}</span>
+                  <span class={`generate-descriptions-status generate-descriptions-status-${row.status}`}>
+                    {row.status}
+                  </span>
+                </div>
+                <p class="generate-descriptions-description">
+                  {row.status === 'error' ? row.error : row.description || <em>—</em>}
+                </p>
+                <div class="generate-descriptions-row-actions">
+                  <input
+                    type="text"
+                    class="generate-descriptions-hint"
+                    placeholder={'Optional hint (e.g. "blue enclosure")'}
+                    value={hints[row.itemId] ?? ''}
+                    onInput={(e) => setHints({ ...hints, [row.itemId]: (e.target as HTMLInputElement).value })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onRegenerateOne(row.itemId)}
+                    disabled={individuallyBusy.has(row.itemId)}
+                  >
+                    {individuallyBusy.has(row.itemId) ? 'Regenerating…' : 'Regenerate'}
+                  </button>
+                </div>
               </div>
             </li>
           ))}

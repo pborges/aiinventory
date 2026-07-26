@@ -28,6 +28,17 @@ async function throwIfError(res: Response): Promise<void> {
   throw new ApiError(res.status, message)
 }
 
+// Some endpoints (e.g. the batch-kickoff 202 Accepted responses) return no
+// body at all — parsing JSON unconditionally on any non-204 status throws a
+// plain SyntaxError on the empty string, which isn't an ApiError and reads
+// as a mysterious "Failed to start" even though the request succeeded. Read
+// as text first and only parse if there's actually something there,
+// regardless of which status code came back.
+async function parseBody<T>(res: Response): Promise<T> {
+  const text = await res.text()
+  return (text ? JSON.parse(text) : undefined) as T
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -36,14 +47,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     credentials: 'same-origin',
   })
   await throwIfError(res)
-  if (res.status === 204) return undefined as T
-  return (await res.json()) as T
+  return parseBody<T>(res)
 }
 
 async function upload<T>(path: string, form: FormData): Promise<T> {
   const res = await fetch(path, { method: 'POST', body: form, credentials: 'same-origin' })
   await throwIfError(res)
-  return (await res.json()) as T
+  return parseBody<T>(res)
 }
 
 export interface PromptSetting {

@@ -66,10 +66,16 @@ export function Capture(_props: RouteProps) {
     }
   }, [frozenFrameUrl])
 
-  function resetToLive() {
+  // clearResult=false is used after a *successful* accept/reconcile: the
+  // camera should be immediately ready for the next photo (no extra tap),
+  // while the confirmation card stays visible below until the next capture
+  // overwrites it. Errors and "nothing found" still go through the default
+  // (clearResult=true) path via the explicit ✕ button, since those need a
+  // conscious look-then-dismiss rather than auto-clearing.
+  function resetToLive(clearResult = true) {
     setFrozenFrameUrl(null)
     setPendingCapture(null)
-    setResult(null)
+    if (clearResult) setResult(null)
     capturedBlobRef.current = null
     setPhase('live')
   }
@@ -80,6 +86,7 @@ export function Capture(_props: RouteProps) {
     const blob = await captureSquareFrame(videoRef.current)
     capturedBlobRef.current = blob
     setFrozenFrameUrl(URL.createObjectURL(blob))
+    setResult(null) // clear the previous cycle's confirmation once a new one starts
     setPhase('analyzing')
 
     try {
@@ -126,11 +133,11 @@ export function Capture(_props: RouteProps) {
         guess: pendingCapture.guess,
         description: applied.image_description ?? pendingCapture.description,
       })
+      resetToLive(false) // saved successfully — go straight back to a live, ready-to-shoot camera
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Save failed' })
-    } finally {
       setPendingCapture(null)
-      setPhase('result')
+      setPhase('result') // failed — keep the frozen frame + error up until the user acknowledges it
     }
   }
 
@@ -142,12 +149,12 @@ export function Capture(_props: RouteProps) {
       setResult({ kind: 'reconciled', diff: applied })
       setPendingDiff(null)
       setApplyingReconcile(false)
-      setPhase('result')
+      resetToLive(false) // applied successfully — go straight back to a live, ready-to-shoot camera
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Reconciliation failed' })
       setPendingDiff(null)
       setApplyingReconcile(false)
-      setPhase('result')
+      setPhase('result') // failed — keep the frozen frame + error up until the user acknowledges it
     }
   }
 
@@ -207,7 +214,6 @@ export function Capture(_props: RouteProps) {
               </div>
               {result.guess && <p class="capture-result-guess">{result.guess}</p>}
               <p class="capture-result-description">{result.description || <em>No notes read from this photo.</em>}</p>
-              <p class="capture-result-hint">Tap the button below to capture another photo.</p>
             </div>
           )}
 
@@ -234,7 +240,6 @@ export function Capture(_props: RouteProps) {
                   </li>
                 ))}
               </ul>
-              <p class="capture-result-hint">Tap the button below to capture another photo.</p>
             </div>
           )}
 
@@ -253,7 +258,7 @@ export function Capture(_props: RouteProps) {
             <button
               type="button"
               class="capture-button capture-button-cancel"
-              onClick={resetToLive}
+              onClick={() => resetToLive()}
               aria-label="Cancel — discard this photo"
             >
               ✕
@@ -271,7 +276,7 @@ export function Capture(_props: RouteProps) {
           <button
             type="button"
             class="capture-button"
-            onClick={phase === 'result' ? resetToLive : onCapture}
+            onClick={phase === 'result' ? () => resetToLive() : onCapture}
             disabled={busy || (phase === 'live' && !!cameraError)}
             aria-label={phase === 'result' ? 'Clear and capture another photo' : 'Capture photo'}
           >
