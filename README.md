@@ -2,7 +2,7 @@
 
 An AI-assisted, camera-first inventory system. Point your phone at an item, snap a photo, and the app figures out what it is, reads the asset tag off a printed label, and files it away — no manual data entry.
 
-> **Status:** early development / design stage. This README describes the intended shape of the app as it's being built.
+> **Status:** all core flows below are implemented end-to-end (capture, reconciliation, search, location view, duplicate finder, item detail, settings, auth, TLS).
 
 ## Why
 
@@ -12,18 +12,22 @@ Traditional inventory tools make you type everything. This one leans on a vision
 
 ### 1. Camera capture — tagging an item
 
-The primary mobile screen is a large square camera viewport with a capture button in the bottom-right corner (thumb-friendly, one-handed use). On capture, the frame is resized/compressed client-side to a bounded max dimension *before* it goes anywhere — the same optimized image is what gets uploaded, sent to Gemini, and stored (see [Tech stack](#tech-stack)). Gemini looks for:
+The camera view hugs the top of the header — a square viewport sized to leave room below it for results — with the capture button pinned to the true bottom-right corner of the phone's viewport (thumb-friendly, one-handed use, regardless of how tall the camera square itself is). It's a **preview-then-commit** flow, mirroring [location reconciliation](#2-camera-capture--location-reconciliation) below: nothing is written to the database until the user explicitly accepts.
 
-- **An asset tag** — a 4-character, uppercase-alpha-only code printed as black text on a white label (e.g. `ZKEI`).
-- **The item itself** — Gemini attempts to identify what the item is, and transcribes any visible serial numbers, part numbers, or other identifying text.
+1. **Capture** — tapping the button freezes the viewfinder on the shot just taken (the live `<video>` stream stays running underneath; the frozen frame is just laid on top) and the button becomes a spinner while the frame is analyzed.
+2. **Analyze (preview)** — the frame is resized/compressed client-side to a bounded max dimension *before* it goes anywhere, then uploaded to a preview endpoint that asks Gemini to look for:
+   - **An asset tag** — a 4-character, uppercase-alpha-only code printed as black text on a white label (e.g. `ZKEI`).
+   - **The item itself** — Gemini attempts to identify what the item is, and transcribes any visible serial numbers, part numbers, or other identifying text. Descriptions deliberately never mention quantity or how items are arranged (a bin holding a dozen identical connectors is still described as one connector, not "several loosely packed connectors") — the asset tag identifies an item *type*, not a specific physical count.
+   - Analyzing never writes anything by itself.
+3. **Review** — if a tag was found, a result card shows the tag, whether accepting will add a new item or a new photo to an existing one, and the short per-image description Gemini read off the photo. Two buttons replace the capture button: **Cancel** (✕, discards the photo, no server write, camera returns live) and **Accept** (✓, commits it).
+4. **Accept (apply)** — accepting re-uploads the same photo to an apply endpoint along with the reviewed tag/description, which does the actual write (create-or-append) and is trusted to echo back what the client showed rather than re-calling Gemini. On success the view clears completely and returns straight to a live, ready-to-shoot camera — no lingering confirmation text to dismiss before the next shot. On failure, the frozen frame and an error message stay up until acknowledged.
+5. **No tag found** — if the frame contains no asset tag (see [location reconciliation](#2-camera-capture--location-reconciliation) for what happens next), the camera shows a "nothing found" message and a single button to clear and try again.
 
-Behavior based on what's found:
-
-| Frame contains | Result |
+| Frame contains | Result on Accept |
 |---|---|
 | An asset tag not yet in the system | A new item is created and the photo is associated with that tag |
 | An asset tag that already exists | The photo is added to that item's existing image set |
-| No asset tag | Capture is rejected — user is prompted to retake with the tag visible |
+| No asset tag | Falls through to the location-reconciliation check below; if that also finds nothing, capture is rejected and the user is prompted to retake |
 
 Each image gets a **short, per-image description** (what Gemini read off that specific photo — serials, part numbers, notable text). This is *not* the item's description. It's raw material: the item's consolidated description is synthesized later from all of its image-level notes (see [Search & bulk actions](#3-search--bulk-actions)).
 
@@ -46,6 +50,8 @@ Reconciling @XYZ
 - XDKW removed
 ```
 
+Same preview-then-commit shape as tag capture: the diff is computed from a preview call and nothing is linked or unlinked until Approve is pressed. Approving clears the camera straight back to a live, ready-to-shoot state (same as a successful tag-capture Accept); Cancel discards the diff with no write and does the same.
+
 Nothing about an item's *description* changes during reconciliation — only its location link.
 
 ### 3. Search & bulk actions
@@ -61,7 +67,9 @@ On mobile, search leans toward *finding*, not maintaining: type-ahead results re
 On desktop, results are selectable (with select-all), and bulk actions apply to the current selection:
 
 - **Delete** selected items
-- **Regenerate description** — Gemini reviews all per-image descriptions attached to the item's photos and consolidates them into one concise item description, explicitly preserving any serial/part numbers found.
+- **Regenerate description** — opens a **live-progress modal** listing every selected item (with its current thumbnail) and kicks off a description-regeneration batch on the server. The batch runs detached from the request that started it (a background goroutine, not tied to the HTTP request's lifetime) as an in-memory, mutex-guarded singleton — the same "one job at a time, tracked in the server process, not the database" pattern as the [duplicate finder](#5-duplicate-finder-desktop) — so it keeps running and reporting progress even if the modal is closed or the page is refreshed. The modal polls a status endpoint roughly once a second and updates each row's status (pending/generating/done/error) and description as results come in. Each row also has its own optional **hint** text box (e.g. "blue enclosure") and an individual **Regenerate** button to redo just that one item's description on demand, independent of the batch.
+
+Gemini reviews all per-image descriptions attached to an item's photos and consolidates them into one concise item description, explicitly preserving any serial/part numbers found and never inventing a quantity or count.
 
 ### 4. Location view (desktop)
 
@@ -88,11 +96,12 @@ An on-demand background process, launched from the desktop view, that scans the 
 
 Primarily a desktop layout, but functional on mobile. Contains:
 
-- An image **carousel** of every photo captured for the item. Images are **drag-and-drop reorderable**; the first image in order is the item's primary image (no separate "select primary" step).
-- The consolidated **item description** below the carousel
+- An image **carousel** of every photo captured for the item. Images are **drag-and-drop reorderable**; the first image in order is the item's primary image (no separate "select primary" step). Each photo can be **deleted** individually from the carousel.
+- The consolidated **item description** below the carousel, with a **Generate description** button that runs the same single-item description regeneration used by the [search view's bulk action](#3-search--bulk-actions) against just this item.
 - A **shadowbox/lightbox** showing the *local* (per-image) description for whichever photo is focused in the carousel
 - The item's current **location**, shown prominently and clickable — clicking it jumps to the search view pre-filtered to that location
 - An **activity log** panel for the item (created, images added, moved between locations, description regenerated, merged, etc.) — the same kind of log shown in the [location view](#4-location-view-desktop), scoped to this item instead
+- A **Delete item** action (hard delete, same as the search view's bulk delete) — frees its asset tag for reuse
 
 ### 7. Settings (desktop)
 
@@ -280,7 +289,9 @@ WHERE images_fts MATCH ?;
 
 ## UI: mobile vs. desktop
 
-- **Mobile (iPhone-optimized):** two primary, full-viewport, no-scroll surfaces — **camera capture** (ingest) and **search** (lookup). Reconciliation diffs and capture feedback appear as overlays rather than pushing the camera off-screen. Mobile search favors image-and-description result cards for fast visual confirmation over dense tables or bulk maintenance.
+**Header/nav:** a single shared header on every view — a 📦 brand icon (links home, to search) followed by finger-friendly icon buttons for each section (📷 capture, 🔍 search, 🗺️ locations, 🧬 duplicates, ⚙️ settings, 🚪 sign out). No text hyperlinks, so the same header works as a thumb-friendly mobile toolbar and a desktop nav bar. **Search is the app's home page** (`/`) — the fastest path to "where is X," and the one flow that matters equally on both breakpoints.
+
+- **Mobile (iPhone-optimized):** two primary, full-viewport, no-scroll surfaces — **camera capture** (ingest) and **search** (lookup, and the default landing view). Reconciliation diffs and capture feedback appear as overlays rather than pushing the camera off-screen. Mobile search favors image-and-description result cards for fast visual confirmation over dense tables or bulk maintenance.
 - **Desktop:** a denser, power-user layout — search adds filters, select-all, and bulk actions (delete, regenerate description); the location view adds a location sidebar, drag-to-move item cards, and a per-location activity footer; the duplicate finder runs a server-side scan and surfaces a resolvable report; the item edit view adds drag-to-reorder images and a per-item activity log. Built with the assumption of a mouse, keyboard, and a larger viewport — this is where items get maintained, not just found.
 
 ## Project layout
