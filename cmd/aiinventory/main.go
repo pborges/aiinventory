@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
 	"net/http"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/pborges/aiinventory/internal/config"
 	"github.com/pborges/aiinventory/internal/gemini"
 	"github.com/pborges/aiinventory/internal/store"
+	"github.com/pborges/aiinventory/internal/tlscert"
 )
 
 func main() {
@@ -45,8 +47,25 @@ func main() {
 
 	handler := api.New(db, codec, geminiClient)
 
-	log.Printf("aiinventory listening on :%s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {
+	if !cfg.TLSEnabled {
+		log.Printf("aiinventory listening on :%s", cfg.Port)
+		if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	cert, err := tlscert.LoadOrGenerate(ctx, db)
+	if err != nil {
+		log.Fatalf("prepare TLS certificate: %v", err)
+	}
+	server := &http.Server{
+		Addr:      ":" + cfg.Port,
+		Handler:   handler,
+		TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
+	}
+	log.Printf("aiinventory listening on :%s (HTTPS, self-signed — browsers will warn until you accept the certificate)", cfg.Port)
+	if err := server.ListenAndServeTLS("", ""); err != nil {
 		log.Fatal(err)
 	}
 }
