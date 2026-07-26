@@ -1,0 +1,15 @@
+# Go
+/aiinventory
+
+# local database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# frontend deps (internal/web/dist IS committed — see README's "Build/embed wiring")
+web/node_modules/
+
+# editor / OS
+.idea/
+.DS_Store
