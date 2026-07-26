@@ -11,6 +11,7 @@ interface RouteProps {
 }
 
 type Phase = 'live' | 'analyzing' | 'awaiting-accept' | 'committing' | 'result'
+type CaptureMode = 'ingest' | 'locate'
 
 interface PendingCapture {
   assetTag: string
@@ -26,6 +27,7 @@ export function Capture(_props: RouteProps) {
   const capturedBlobRef = useRef<Blob | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('live')
+  const [mode, setMode] = useState<CaptureMode>('ingest')
   const [frozenFrameUrl, setFrozenFrameUrl] = useState<string | null>(null)
   const [pendingCapture, setPendingCapture] = useState<PendingCapture | null>(null)
   const [result, setResult] = useState<ResultData | null>(null)
@@ -81,19 +83,26 @@ export function Capture(_props: RouteProps) {
     setPhase('analyzing')
 
     try {
-      // The app doesn't ask which kind of label is in frame — it tries the
-      // asset-tag flow first (the common case), and only falls back to the
-      // location-reconciliation flow if no asset tag was found. Analyzing a
-      // tag never writes anything by itself; the user must Accept.
-      const preview = await api.capturePreview(blob)
-      if (preview.has_asset_tag) {
-        setPendingCapture({
-          assetTag: preview.asset_tag ?? '',
-          guess: preview.item_guess ?? '',
-          description: preview.image_description ?? '',
-          itemWillBeNew: !!preview.item_will_be_new,
-        })
-        setPhase('awaiting-accept')
+      // Which flow runs is an explicit user choice (the mode toggle below
+      // the viewfinder), not auto-detected — asset tags and location codes
+      // can both be a handful of uppercase letters on a white sticker, and
+      // guessing which one Gemini should look for was unreliable in
+      // practice. Analyzing a tag never writes anything by itself; the
+      // user must Accept.
+      if (mode === 'ingest') {
+        const preview = await api.capturePreview(blob)
+        if (preview.has_asset_tag) {
+          setPendingCapture({
+            assetTag: preview.asset_tag ?? '',
+            guess: preview.item_guess ?? '',
+            description: preview.image_description ?? '',
+            itemWillBeNew: !!preview.item_will_be_new,
+          })
+          setPhase('awaiting-accept')
+          return
+        }
+        setResult({ kind: 'nothing' })
+        setPhase('result')
         return
       }
 
@@ -166,6 +175,25 @@ export function Capture(_props: RouteProps) {
           )}
         </div>
 
+        <div class="capture-mode-toggle" role="group" aria-label="Capture mode">
+          <button
+            type="button"
+            class={'capture-mode-btn' + (mode === 'ingest' ? ' capture-mode-btn-active' : '')}
+            onClick={() => setMode('ingest')}
+            disabled={phase !== 'live'}
+          >
+            📷 Ingest item
+          </button>
+          <button
+            type="button"
+            class={'capture-mode-btn' + (mode === 'locate' ? ' capture-mode-btn-active' : '')}
+            onClick={() => setMode('locate')}
+            disabled={phase !== 'live'}
+          >
+            🗺️ Locate items
+          </button>
+        </div>
+
         <div class="capture-results">
           {phase === 'analyzing' && !pendingDiff && <p class="capture-feedback">Analyzing photo…</p>}
           {phase === 'committing' && <p class="capture-feedback">Saving…</p>}
@@ -188,7 +216,9 @@ export function Capture(_props: RouteProps) {
 
           {result?.kind === 'nothing' && (
             <p class="capture-feedback capture-feedback-warning">
-              No asset tag or location code found — retake with the label clearly visible.
+              {mode === 'ingest'
+                ? 'No asset tag found — retake with the label clearly visible.'
+                : 'No location code found — retake with the label clearly visible.'}
             </p>
           )}
           {result?.kind === 'error' && <p class="capture-feedback capture-feedback-error">{result.message}</p>}

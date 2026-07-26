@@ -14,6 +14,8 @@ Traditional inventory tools make you type everything. This one leans on a vision
 
 The camera view hugs the top of the header — a square viewport sized to leave room below it for results — with the capture button pinned to the true bottom-right corner of the phone's viewport (thumb-friendly, one-handed use, regardless of how tall the camera square itself is). It's a **preview-then-commit** flow, mirroring [location reconciliation](#2-camera-capture--location-reconciliation) below: nothing is written to the database until the user explicitly accepts.
 
+A **mode toggle** directly under the viewfinder — **📷 Ingest item** vs **🗺️ Locate items** — picks which flow a capture runs. Earlier versions tried to guess (asset-tag flow first, falling back to location-reconciliation if nothing was found), but asset tags and location codes are both just a handful of uppercase letters on a white sticker, and letting Gemini guess which one it was looking for was unreliable in practice. The toggle is disabled mid-capture and stays on whatever you last picked across shots, since scanning a run of the same kind of label back-to-back is the common case.
+
 1. **Capture** — tapping the button freezes the viewfinder on the shot just taken (the live `<video>` stream stays running underneath; the frozen frame is just laid on top) and the button becomes a spinner while the frame is analyzed.
 2. **Analyze (preview)** — the frame is resized/compressed client-side to a bounded max dimension *before* it goes anywhere, then uploaded to a preview endpoint that asks Gemini to look for:
    - **An asset tag** — a 4-character, uppercase-alpha-only code printed as black text on a white label (e.g. `ZKEI`).
@@ -21,13 +23,13 @@ The camera view hugs the top of the header — a square viewport sized to leave 
    - Analyzing never writes anything by itself.
 3. **Review** — if a tag was found, a result card shows the tag, whether accepting will add a new item or a new photo to an existing one, and the short per-image description Gemini read off the photo. Two buttons replace the capture button: **Cancel** (✕, discards the photo, no server write, camera returns live) and **Accept** (✓, commits it).
 4. **Accept (apply)** — accepting re-uploads the same photo to an apply endpoint along with the reviewed tag/description, which does the actual write (create-or-append) and is trusted to echo back what the client showed rather than re-calling Gemini. On success the view clears completely and returns straight to a live, ready-to-shoot camera — no lingering confirmation text to dismiss before the next shot. On failure, the frozen frame and an error message stay up until acknowledged.
-5. **No tag found** — if the frame contains no asset tag (see [location reconciliation](#2-camera-capture--location-reconciliation) for what happens next), the camera shows a "nothing found" message and a single button to clear and try again.
+5. **No tag found** — if the frame contains no asset tag, the camera shows a "no asset tag found" message and a single button to clear and try again (switch to **Locate items** first if the frame actually has a location code instead).
 
-| Frame contains | Result on Accept |
+| Frame contains (Ingest item mode) | Result on Accept |
 |---|---|
 | An asset tag not yet in the system | A new item is created and the photo is associated with that tag |
 | An asset tag that already exists | The photo is added to that item's existing image set |
-| No asset tag | Falls through to the location-reconciliation check below; if that also finds nothing, capture is rejected and the user is prompted to retake |
+| No asset tag | Capture is rejected and the user is prompted to retake, or switch to **Locate items** mode |
 
 Each image gets a **short, per-image description** (what Gemini read off that specific photo — serials, part numbers, notable text). This is *not* the item's description. It's raw material: the item's consolidated description is synthesized later from all of its image-level notes (see [Search & bulk actions](#3-search--bulk-actions)).
 
@@ -35,7 +37,7 @@ Each image gets a **short, per-image description** (what Gemini read off that sp
 
 A **location code** is `@` followed by 3 uppercase-alpha-only characters (e.g. `@XYZ`) and marks a storage location — a bin, shelf, or box, in a chaotic-storage model similar to Amazon's warehouses.
 
-A frame containing a location code is treated differently: Gemini reads the location code plus every asset tag visible in the same frame, and the app computes a **reconciliation diff** against the location's current contents:
+Selecting **🗺️ Locate items** on the mode toggle (see [tag capture](#1-camera-capture--tagging-an-item) above) routes a capture through this flow instead: Gemini reads the location code plus every asset tag visible in the same frame, and the app computes a **reconciliation diff** against the location's current contents:
 
 - Asset tags in the frame that don't match any existing item anywhere → **new** item created (no photo) and linked to this location
 - Asset tags in the frame but not currently linked to this location → **added**
@@ -55,6 +57,8 @@ Reconciling @XYZ
 A new item created this way has no photo yet — it shows up in search with an asset-tag placeholder thumbnail instead of an image, findable via the **no photo** filter (see [search filters](#3-search--bulk-actions)) until someone captures a real photo of it later via the tag-capture flow.
 
 Same preview-then-commit shape as tag capture: the diff is computed from a preview call and nothing is linked or unlinked until Approve is pressed. Approving clears the camera straight back to a live, ready-to-shoot state (same as a successful tag-capture Accept); Cancel discards the diff with no write and does the same.
+
+Each proposed change renders as its own card with a 🗑 button to drop just that one before approving — dropping a new/added/moved card excludes its tag from what gets sent on Approve, dropping a removed card keeps that item linked here instead of unlinking it. The rest of the diff still applies normally.
 
 Nothing about an item's *description* changes during reconciliation — only its location link.
 
