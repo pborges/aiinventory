@@ -357,18 +357,26 @@ body,
 
 /* Thumb-accessible: fixed to the bottom-right corner of the device
    viewport (not the camera window), so it's reachable one-handed
-   regardless of how tall/short the camera square ends up being. */
-.capture-button {
+   regardless of how tall/short the camera square ends up being. Holds
+   either the single shutter/spinner/clear button, or the Cancel+Accept
+   pair (Cancel to the left) once a tag preview is awaiting a decision. */
+.capture-controls {
   position: fixed;
   right: max(1.25rem, env(safe-area-inset-right));
   bottom: max(1.25rem, env(safe-area-inset-bottom));
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.capture-button {
   width: 4.5rem;
   height: 4.5rem;
   border-radius: 50%;
   background: #fff;
   border: 4px solid rgba(0, 0, 0, 0.3);
   cursor: pointer;
-  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -379,6 +387,19 @@ body,
 .capture-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.capture-button-cancel {
+  width: 3.5rem;
+  height: 3.5rem;
+  font-size: 1.4rem;
+  background: rgba(255, 255, 255, 0.85);
+  color: #d33;
+}
+
+.capture-button-accept {
+  background: #2a8f4c;
+  color: #fff;
 }
 
 .capture-spinner {

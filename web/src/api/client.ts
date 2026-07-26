@@ -71,6 +71,14 @@ export interface CaptureResponse {
   image_description?: string
 }
 
+export interface CapturePreviewResponse {
+  has_asset_tag: boolean
+  asset_tag?: string
+  item_guess?: string
+  image_description?: string
+  item_will_be_new?: boolean
+}
+
 export interface MovedItem {
   asset_tag: string
   from_location?: string
@@ -168,10 +176,17 @@ export const api = {
   me: () => request<{ user: User }>('GET', '/api/auth/me'),
   getSettings: () => request<Settings>('GET', '/api/settings'),
   updateSettings: (update: SettingsUpdate) => request<Settings>('PUT', '/api/settings', update),
-  capture: (image: Blob) => {
+  capturePreview: (image: Blob) => {
     const form = new FormData()
     form.set('image', image, 'capture.jpg')
-    return upload<CaptureResponse>('/api/capture', form)
+    return upload<CapturePreviewResponse>('/api/capture/preview', form)
+  },
+  captureApply: (image: Blob, assetTag: string, description: string) => {
+    const form = new FormData()
+    form.set('image', image, 'capture.jpg')
+    form.set('asset_tag', assetTag)
+    form.set('description', description)
+    return upload<CaptureResponse>('/api/capture/apply', form)
   },
   reconcilePreview: (image: Blob) => {
     const form = new FormData()

@@ -12,7 +12,7 @@ func TestReconcilePreviewNoLocationCode(t *testing.T) {
 	fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{HasLocationCode: false}}
 	h, cookies := newTestServerWithGemini(t, fake)
 
-	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"))
+	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
 	if req.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", req.Code, req.Body.String())
 	}
@@ -44,7 +44,7 @@ func TestReconcilePreviewAndApplyFullFlow(t *testing.T) {
 	// now reconcile @XYZ against a frame containing ZKEI + GKEI (not XDKW):
 	// ZKEI -> added, GKEI -> moved from @QRS, XDKW -> removed
 	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationCode: true, LocationCode: "@XYZ", AssetTags: []string{"ZKEI", "GKEI"}}
-	previewResp := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("xyz-frame"))
+	previewResp := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("xyz-frame"), nil)
 	if previewResp.Code != http.StatusOK {
 		t.Fatalf("preview status = %d, body = %s", previewResp.Code, previewResp.Body.String())
 	}
@@ -68,7 +68,7 @@ func TestReconcilePreviewAndApplyFullFlow(t *testing.T) {
 	}
 
 	// re-preview against the same frame should now show no changes (already applied)
-	noopResp := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("xyz-frame-again"))
+	noopResp := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("xyz-frame-again"), nil)
 	var noop reconcileDiffResponse
 	json.NewDecoder(noopResp.Body).Decode(&noop)
 	if len(noop.Added) != 0 || len(noop.Moved) != 0 || len(noop.Removed) != 0 {

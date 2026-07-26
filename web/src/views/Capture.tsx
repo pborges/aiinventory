@@ -9,23 +9,31 @@ interface RouteProps {
   default?: boolean
 }
 
-type Phase = 'live' | 'processing' | 'result'
+type Phase = 'live' | 'analyzing' | 'awaiting-accept' | 'committing' | 'result'
+
+interface PendingCapture {
+  assetTag: string
+  guess: string
+  description: string
+  itemWillBeNew: boolean
+}
 
 type ResultData =
   | { kind: 'item'; assetTag: string; itemId: number; itemWasNew: boolean; guess: string; description: string }
   | { kind: 'reconciled'; diff: ReconcileDiffResponse }
-  | { kind: 'reconcile-cancelled' }
   | { kind: 'nothing' }
   | { kind: 'error'; message: string }
 
 export function Capture(_props: RouteProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const capturedBlobRef = useRef<Blob | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('live')
   const [frozenFrameUrl, setFrozenFrameUrl] = useState<string | null>(null)
+  const [pendingCapture, setPendingCapture] = useState<PendingCapture | null>(null)
   const [result, setResult] = useState<ResultData | null>(null)
   const [pendingDiff, setPendingDiff] = useState<ReconcileDiffResponse | null>(null)
-  const [applying, setApplying] = useState(false)
+  const [applyingReconcile, setApplyingReconcile] = useState(false)
 
   useEffect(() => {
     let stream: MediaStream | null = null
@@ -58,34 +66,42 @@ export function Capture(_props: RouteProps) {
     }
   }, [frozenFrameUrl])
 
+  function resetToLive() {
+    setFrozenFrameUrl(null)
+    setPendingCapture(null)
+    setResult(null)
+    capturedBlobRef.current = null
+    setPhase('live')
+  }
+
   async function onCapture() {
     if (!videoRef.current || phase !== 'live') return
 
     const blob = await captureSquareFrame(videoRef.current)
+    capturedBlobRef.current = blob
     setFrozenFrameUrl(URL.createObjectURL(blob))
-    setPhase('processing')
+    setPhase('analyzing')
 
     try {
       // The app doesn't ask which kind of label is in frame — it tries the
       // asset-tag flow first (the common case), and only falls back to the
-      // location-reconciliation flow if no asset tag was found.
-      const captureResult = await api.capture(blob)
-      if (captureResult.has_asset_tag) {
-        setResult({
-          kind: 'item',
-          assetTag: captureResult.asset_tag ?? '',
-          itemId: captureResult.item_id ?? 0,
-          itemWasNew: !!captureResult.item_was_new,
-          guess: captureResult.item_guess ?? '',
-          description: captureResult.image_description ?? '',
+      // location-reconciliation flow if no asset tag was found. Analyzing a
+      // tag never writes anything by itself; the user must Accept.
+      const preview = await api.capturePreview(blob)
+      if (preview.has_asset_tag) {
+        setPendingCapture({
+          assetTag: preview.asset_tag ?? '',
+          guess: preview.item_guess ?? '',
+          description: preview.image_description ?? '',
+          itemWillBeNew: !!preview.item_will_be_new,
         })
-        setPhase('result')
+        setPhase('awaiting-accept')
         return
       }
 
       const diff = await api.reconcilePreview(blob)
       if (diff.has_location_code) {
-        setPendingDiff(diff) // stays in 'processing' (spinner) until the modal is resolved
+        setPendingDiff(diff) // stays in 'analyzing' (spinner) until the modal is resolved
         return
       }
 
@@ -97,34 +113,51 @@ export function Capture(_props: RouteProps) {
     }
   }
 
+  async function onAcceptCapture() {
+    if (!pendingCapture || !capturedBlobRef.current) return
+    setPhase('committing')
+    try {
+      const applied = await api.captureApply(capturedBlobRef.current, pendingCapture.assetTag, pendingCapture.description)
+      setResult({
+        kind: 'item',
+        assetTag: applied.asset_tag ?? pendingCapture.assetTag,
+        itemId: applied.item_id ?? 0,
+        itemWasNew: !!applied.item_was_new,
+        guess: pendingCapture.guess,
+        description: applied.image_description ?? pendingCapture.description,
+      })
+    } catch (err) {
+      setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Save failed' })
+    } finally {
+      setPendingCapture(null)
+      setPhase('result')
+    }
+  }
+
   async function onApproveReconcile() {
     if (!pendingDiff?.location_code) return
-    setApplying(true)
+    setApplyingReconcile(true)
     try {
       const applied = await api.reconcileApply(pendingDiff.location_code, pendingDiff.asset_tags)
       setResult({ kind: 'reconciled', diff: applied })
+      setPendingDiff(null)
+      setApplyingReconcile(false)
+      setPhase('result')
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Reconciliation failed' })
-    } finally {
       setPendingDiff(null)
-      setApplying(false)
+      setApplyingReconcile(false)
       setPhase('result')
     }
   }
 
   function onCancelReconcile() {
     setPendingDiff(null)
-    setResult({ kind: 'reconcile-cancelled' })
-    setPhase('result')
+    resetToLive()
   }
 
-  function onClear() {
-    setFrozenFrameUrl(null)
-    setResult(null)
-    setPhase('live')
-  }
-
-  const showingFrozenFrame = phase === 'processing' || phase === 'result'
+  const showingFrozenFrame = phase !== 'live'
+  const busy = phase === 'analyzing' || phase === 'committing'
 
   return (
     <div class="capture-view">
@@ -145,7 +178,24 @@ export function Capture(_props: RouteProps) {
         </div>
 
         <div class="capture-results">
-          {phase === 'processing' && !pendingDiff && <p class="capture-feedback">Analyzing photo…</p>}
+          {phase === 'analyzing' && !pendingDiff && <p class="capture-feedback">Analyzing photo…</p>}
+          {phase === 'committing' && <p class="capture-feedback">Saving…</p>}
+
+          {phase === 'awaiting-accept' && pendingCapture && (
+            <div class="capture-result-card">
+              <div class="capture-result-header">
+                <span class="capture-result-tag">{pendingCapture.assetTag}</span>
+                <span class="capture-result-action">
+                  {pendingCapture.itemWillBeNew ? 'Will add new item' : 'Will add new photo'}
+                </span>
+              </div>
+              {pendingCapture.guess && <p class="capture-result-guess">{pendingCapture.guess}</p>}
+              <p class="capture-result-description">
+                {pendingCapture.description || <em>No notes read from this photo.</em>}
+              </p>
+              <p class="capture-result-hint">Accept to save, or Cancel to discard this photo.</p>
+            </div>
+          )}
 
           {result?.kind === 'item' && (
             <div class="capture-result-card">
@@ -188,9 +238,6 @@ export function Capture(_props: RouteProps) {
             </div>
           )}
 
-          {result?.kind === 'reconcile-cancelled' && (
-            <p class="capture-feedback capture-feedback-warning">Reconciliation cancelled.</p>
-          )}
           {result?.kind === 'nothing' && (
             <p class="capture-feedback capture-feedback-warning">
               No asset tag or location code found — retake with the label clearly visible.
@@ -200,21 +247,44 @@ export function Capture(_props: RouteProps) {
         </div>
       </main>
 
-      <button
-        type="button"
-        class="capture-button"
-        onClick={phase === 'result' ? onClear : onCapture}
-        disabled={phase === 'processing' || (phase === 'live' && !!cameraError)}
-        aria-label={phase === 'result' ? 'Clear and capture another photo' : 'Capture photo'}
-      >
-        {phase === 'processing' && <span class="capture-spinner" />}
-        {phase === 'result' && <span aria-hidden="true">✕</span>}
-      </button>
+      <div class="capture-controls">
+        {phase === 'awaiting-accept' ? (
+          <>
+            <button
+              type="button"
+              class="capture-button capture-button-cancel"
+              onClick={resetToLive}
+              aria-label="Cancel — discard this photo"
+            >
+              ✕
+            </button>
+            <button
+              type="button"
+              class="capture-button capture-button-accept"
+              onClick={onAcceptCapture}
+              aria-label="Accept — save this item"
+            >
+              ✓
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            class="capture-button"
+            onClick={phase === 'result' ? resetToLive : onCapture}
+            disabled={busy || (phase === 'live' && !!cameraError)}
+            aria-label={phase === 'result' ? 'Clear and capture another photo' : 'Capture photo'}
+          >
+            {busy && <span class="capture-spinner" />}
+            {phase === 'result' && <span aria-hidden="true">✕</span>}
+          </button>
+        )}
+      </div>
 
       {pendingDiff && (
         <ReconcileDiff
           diff={pendingDiff}
-          applying={applying}
+          applying={applyingReconcile}
           onApprove={onApproveReconcile}
           onCancel={onCancelReconcile}
         />
