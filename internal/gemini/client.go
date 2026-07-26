@@ -10,7 +10,10 @@ import (
 )
 
 // DefaultModel is used whenever no gemini_model setting has been configured.
-const DefaultModel = "gemini-2.5-flash"
+// Confirmed against Google's live model list (ai.google.dev/gemini-api/docs/models)
+// rather than assumed from training data, since model names move fast —
+// re-verify before bumping this if it looks stale.
+const DefaultModel = "gemini-3.6-flash"
 
 // Client is the seam between internal/inventory and the actual Gemini API.
 // Every method takes an already-resolved model and prompt (default or

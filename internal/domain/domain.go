@@ -64,6 +64,7 @@ const (
 	ActivityItemRemovedFromLocation ActivityAction = "item_removed_from_location"
 	ActivityLocationReconciled      ActivityAction = "location_reconciled"
 	ActivityItemDeleted             ActivityAction = "item_deleted"
+	ActivityImageDeleted            ActivityAction = "image_deleted"
 	ActivityDescriptionRegenerated  ActivityAction = "description_regenerated"
 	ActivityDescriptionEdited       ActivityAction = "description_edited"
 	ActivityDuplicateGroupDismissed ActivityAction = "duplicate_group_dismissed"

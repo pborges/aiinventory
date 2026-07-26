@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { api, ApiError, type ActivityEntry, type Location, type LocationItem } from '../api/client'
-import { currentUser, logout } from '../state/auth'
+import { Header } from '../components/Header'
 
 interface RouteProps {
   path?: string
@@ -66,19 +66,7 @@ export function LocationView(_props: RouteProps) {
 
   return (
     <div class="location-view">
-      <header class="app-header">
-        <span class="app-title">aiinventory</span>
-        <span class="app-header-user">
-          {currentUser.value?.username}
-          <a href="/capture">Capture</a>
-          <a href="/search">Search</a>
-          <a href="/duplicates">Duplicates</a>
-          <a href="/settings">Settings</a>
-          <button type="button" class="link-button" onClick={() => logout()}>
-            Sign out
-          </button>
-        </span>
-      </header>
+      <Header active="locations" />
 
       <div class="location-layout">
         <aside class="location-sidebar">

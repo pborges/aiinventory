@@ -202,6 +202,10 @@ export const api = {
     request<ItemDetail>('PUT', `/api/items/${id}`, { description }),
   reorderImages: (itemId: number, imageIds: number[]) =>
     request<ItemDetail>('PUT', `/api/items/${itemId}/images/order`, { image_ids: imageIds }),
+  deleteImage: (itemId: number, imageId: number) =>
+    request<ItemDetail>('DELETE', `/api/items/${itemId}/images/${imageId}`),
+  regenerateItemDescription: (itemId: number) =>
+    request<ItemDetail>('POST', `/api/items/${itemId}/regenerate-description`),
   listLocations: () => request<{ locations: Location[] }>('GET', '/api/locations'),
   getLocationItems: (id: number) => request<{ items: LocationItem[] }>('GET', `/api/locations/${id}/items`),
   getLocationActivity: (id: number) => request<{ activity: ActivityEntry[] }>('GET', `/api/locations/${id}/activity`),

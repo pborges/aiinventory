@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { api, ApiError, type Settings as SettingsData, type UserListItem } from '../api/client'
 import { currentUser } from '../state/auth'
+import { Header } from '../components/Header'
 
 interface RouteProps {
   path?: string
@@ -14,7 +15,16 @@ const PROMPT_TYPES: { key: string; label: string }[] = [
   { key: 'duplicate_detection', label: 'Duplicate detection' },
 ]
 
-const MODEL_SUGGESTIONS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite']
+// A starting-point list, not exhaustive — this field is free text specifically
+// because model names move fast; check ai.google.dev/gemini-api/docs/models
+// for the current lineup if these look stale.
+const MODEL_SUGGESTIONS = [
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-pro-preview',
+  'gemini-2.5-pro',
+]
 
 export function Settings(_props: RouteProps) {
   const [data, setData] = useState<SettingsData | null>(null)
@@ -97,107 +107,110 @@ export function Settings(_props: RouteProps) {
     }
   }
 
-  if (!data) {
-    return <p>Loading…</p>
-  }
-
   return (
     <div class="settings-view">
-      <a href="/capture" class="settings-back-link">
-        ← Back
-      </a>
-      <h1>Settings</h1>
+      <Header active="settings" />
 
-      <form class="settings-form" onSubmit={onSave}>
-        <section>
-          <h2>Gemini configuration</h2>
-          <label class="settings-field">
-            Model
-            <input
-              list="model-suggestions"
-              value={model}
-              placeholder={data.gemini_model_default}
-              onInput={(e) => setModel((e.target as HTMLInputElement).value)}
-            />
-            <datalist id="model-suggestions">
-              {MODEL_SUGGESTIONS.map((m) => (
-                <option value={m} key={m} />
-              ))}
-            </datalist>
-          </label>
+      <div class="settings-content">
+        {!data ? (
+          <p>Loading…</p>
+        ) : (
+          <>
+            <h1>Settings</h1>
 
-          {PROMPT_TYPES.map(({ key, label }) => (
-            <div class="settings-field" key={key}>
-              <label>
-                {label} prompt override
-                <textarea
-                  rows={4}
-                  value={overrides[key] ?? ''}
-                  placeholder="Leave empty to use the built-in default"
-                  onInput={(e) => setOverrides({ ...overrides, [key]: (e.target as HTMLTextAreaElement).value })}
+            <form class="settings-form" onSubmit={onSave}>
+              <section>
+                <h2>Gemini configuration</h2>
+                <label class="settings-field">
+                  Model
+                  <input
+                    list="model-suggestions"
+                    value={model}
+                    placeholder={data.gemini_model_default}
+                    onInput={(e) => setModel((e.target as HTMLInputElement).value)}
+                  />
+                  <datalist id="model-suggestions">
+                    {MODEL_SUGGESTIONS.map((m) => (
+                      <option value={m} key={m} />
+                    ))}
+                  </datalist>
+                </label>
+
+                {PROMPT_TYPES.map(({ key, label }) => (
+                  <div class="settings-field" key={key}>
+                    <label>
+                      {label} prompt override
+                      <textarea
+                        rows={4}
+                        value={overrides[key] ?? ''}
+                        placeholder="Leave empty to use the built-in default"
+                        onInput={(e) => setOverrides({ ...overrides, [key]: (e.target as HTMLTextAreaElement).value })}
+                      />
+                    </label>
+                    <button type="button" class="link-button" onClick={() => showDefault(key)}>
+                      View default prompt
+                    </button>
+                  </div>
+                ))}
+              </section>
+
+              <div class="settings-actions">
+                <button type="submit" disabled={status === 'saving'}>
+                  Save
+                </button>
+                {status === 'saved' && <span class="settings-status">Saved</span>}
+                {errorMsg && <span class="settings-status settings-status-error">{errorMsg}</span>}
+              </div>
+            </form>
+
+            <section class="settings-users">
+              <h2>Users</h2>
+              <p class="settings-users-note">
+                No admin/non-admin distinction yet — any logged-in, enabled user can manage every account.
+              </p>
+
+              <ul class="settings-user-list">
+                {users === null && <li>Loading…</li>}
+                {users?.map((u) => (
+                  <li class="settings-user-row" key={u.id}>
+                    <span class="settings-user-name">
+                      {u.username}
+                      {u.id === currentUser.value?.id && ' (you)'}
+                    </span>
+                    <span class={u.enabled ? 'settings-user-status-enabled' : 'settings-user-status-disabled'}>
+                      {u.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <button type="button" onClick={() => onToggleEnabled(u)} disabled={userBusy}>
+                      {u.enabled ? 'Disable' : 'Enable'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              <form class="settings-new-user-form" onSubmit={onCreateUser}>
+                <input
+                  placeholder="Username"
+                  value={newUsername}
+                  onInput={(e) => setNewUsername((e.target as HTMLInputElement).value)}
+                  required
                 />
-              </label>
-              <button type="button" class="link-button" onClick={() => showDefault(key)}>
-                View default prompt
-              </button>
-            </div>
-          ))}
-        </section>
-
-        <div class="settings-actions">
-          <button type="submit" disabled={status === 'saving'}>
-            Save
-          </button>
-          {status === 'saved' && <span class="settings-status">Saved</span>}
-          {errorMsg && <span class="settings-status settings-status-error">{errorMsg}</span>}
-        </div>
-      </form>
-
-      <section class="settings-users">
-        <h2>Users</h2>
-        <p class="settings-users-note">
-          No admin/non-admin distinction yet — any logged-in, enabled user can manage every account.
-        </p>
-
-        <ul class="settings-user-list">
-          {users === null && <li>Loading…</li>}
-          {users?.map((u) => (
-            <li class="settings-user-row" key={u.id}>
-              <span class="settings-user-name">
-                {u.username}
-                {u.id === currentUser.value?.id && ' (you)'}
-              </span>
-              <span class={u.enabled ? 'settings-user-status-enabled' : 'settings-user-status-disabled'}>
-                {u.enabled ? 'Enabled' : 'Disabled'}
-              </span>
-              <button type="button" onClick={() => onToggleEnabled(u)} disabled={userBusy}>
-                {u.enabled ? 'Disable' : 'Enable'}
-              </button>
-            </li>
-          ))}
-        </ul>
-
-        <form class="settings-new-user-form" onSubmit={onCreateUser}>
-          <input
-            placeholder="Username"
-            value={newUsername}
-            onInput={(e) => setNewUsername((e.target as HTMLInputElement).value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={newPassword}
-            onInput={(e) => setNewPassword((e.target as HTMLInputElement).value)}
-            minLength={8}
-            required
-          />
-          <button type="submit" disabled={userBusy}>
-            Add user
-          </button>
-        </form>
-        {userError && <p class="settings-status settings-status-error">{userError}</p>}
-      </section>
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={newPassword}
+                  onInput={(e) => setNewPassword((e.target as HTMLInputElement).value)}
+                  minLength={8}
+                  required
+                />
+                <button type="submit" disabled={userBusy}>
+                  Add user
+                </button>
+              </form>
+              {userError && <p class="settings-status settings-status-error">{userError}</p>}
+            </section>
+          </>
+        )}
+      </div>
 
       <dialog ref={dialogRef} class="prompt-shadowbox">
         <pre>{shadowboxText}</pre>

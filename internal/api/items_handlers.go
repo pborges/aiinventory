@@ -8,6 +8,8 @@ import (
 
 	"github.com/pborges/aiinventory/internal/auth"
 	"github.com/pborges/aiinventory/internal/domain"
+	"github.com/pborges/aiinventory/internal/gemini"
+	"github.com/pborges/aiinventory/internal/inventory"
 	"github.com/pborges/aiinventory/internal/store"
 )
 
@@ -166,6 +168,82 @@ func (s *Server) handleReorderImages(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.store.ReorderImages(r.Context(), id, req.ImageIDs); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid image order: "+err.Error())
+		return
+	}
+
+	s.handleGetItem(w, r)
+}
+
+// handleDeleteImage removes a single photo from an item — for cleaning up
+// a bad or duplicate capture without deleting the whole item.
+func (s *Server) handleDeleteImage(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.CurrentUser(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	itemID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid item id")
+		return
+	}
+	imageID, err := strconv.ParseInt(r.PathValue("imageId"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid image id")
+		return
+	}
+
+	ctx := r.Context()
+	if err := s.store.DeleteImage(ctx, itemID, imageID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if err := s.store.LogActivity(ctx, user.ID, domain.ActivityImageDeleted, &itemID, nil, ""); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	s.handleGetItem(w, r)
+}
+
+// handleRegenerateItemDescription is the item detail view's single-item
+// "Generate description" action: Gemini reviews every per-image note
+// attached to the item and consolidates them into one description (the
+// same logic as the Search view's bulk action, invoked here for just one
+// item and returning the full refreshed item detail).
+func (s *Server) handleRegenerateItemDescription(w http.ResponseWriter, r *http.Request) {
+	if s.gemini == nil {
+		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (GEMINI_API_KEY not configured)")
+		return
+	}
+	user, ok := auth.CurrentUser(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid item id")
+		return
+	}
+
+	ctx := r.Context()
+	model, prompt, err := s.resolveGeminiConfig(ctx, gemini.DescriptionRegeneration)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if _, err := inventory.RegenerateDescription(ctx, s.store, s.gemini, user.ID, model, prompt, id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusBadGateway, "gemini request failed: "+err.Error())
 		return
 	}
 

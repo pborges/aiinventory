@@ -1,26 +1,29 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { api, ApiError, type CaptureResponse, type ReconcileDiffResponse } from '../api/client'
+import { api, ApiError, type ReconcileDiffResponse } from '../api/client'
 import { captureSquareFrame } from '../lib/camera'
-import { currentUser, logout } from '../state/auth'
 import { ReconcileDiff } from '../components/ReconcileDiff'
+import { Header } from '../components/Header'
 
 interface RouteProps {
   path?: string
   default?: boolean
 }
 
-type Feedback =
-  | { kind: 'none' }
-  | { kind: 'success'; response: CaptureResponse }
+type Phase = 'live' | 'processing' | 'result'
+
+type ResultData =
+  | { kind: 'item'; assetTag: string; itemId: number; itemWasNew: boolean; guess: string; description: string }
   | { kind: 'reconciled'; diff: ReconcileDiffResponse }
-  | { kind: 'nothing-found' }
+  | { kind: 'reconcile-cancelled' }
+  | { kind: 'nothing' }
   | { kind: 'error'; message: string }
 
 export function Capture(_props: RouteProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
-  const [capturing, setCapturing] = useState(false)
-  const [feedback, setFeedback] = useState<Feedback>({ kind: 'none' })
+  const [phase, setPhase] = useState<Phase>('live')
+  const [frozenFrameUrl, setFrozenFrameUrl] = useState<string | null>(null)
+  const [result, setResult] = useState<ResultData | null>(null)
   const [pendingDiff, setPendingDiff] = useState<ReconcileDiffResponse | null>(null)
   const [applying, setApplying] = useState(false)
 
@@ -48,33 +51,49 @@ export function Capture(_props: RouteProps) {
     }
   }, [])
 
-  async function onCapture() {
-    if (!videoRef.current || capturing) return
-    setCapturing(true)
-    setFeedback({ kind: 'none' })
-    try {
-      const blob = await captureSquareFrame(videoRef.current)
+  useEffect(() => {
+    // revoke the frozen-frame object URL whenever it's replaced or on unmount
+    return () => {
+      if (frozenFrameUrl) URL.revokeObjectURL(frozenFrameUrl)
+    }
+  }, [frozenFrameUrl])
 
+  async function onCapture() {
+    if (!videoRef.current || phase !== 'live') return
+
+    const blob = await captureSquareFrame(videoRef.current)
+    setFrozenFrameUrl(URL.createObjectURL(blob))
+    setPhase('processing')
+
+    try {
       // The app doesn't ask which kind of label is in frame — it tries the
       // asset-tag flow first (the common case), and only falls back to the
       // location-reconciliation flow if no asset tag was found.
       const captureResult = await api.capture(blob)
       if (captureResult.has_asset_tag) {
-        setFeedback({ kind: 'success', response: captureResult })
+        setResult({
+          kind: 'item',
+          assetTag: captureResult.asset_tag ?? '',
+          itemId: captureResult.item_id ?? 0,
+          itemWasNew: !!captureResult.item_was_new,
+          guess: captureResult.item_guess ?? '',
+          description: captureResult.image_description ?? '',
+        })
+        setPhase('result')
         return
       }
 
       const diff = await api.reconcilePreview(blob)
       if (diff.has_location_code) {
-        setPendingDiff(diff)
+        setPendingDiff(diff) // stays in 'processing' (spinner) until the modal is resolved
         return
       }
 
-      setFeedback({ kind: 'nothing-found' })
+      setResult({ kind: 'nothing' })
+      setPhase('result')
     } catch (err) {
-      setFeedback({ kind: 'error', message: err instanceof ApiError ? err.message : 'Capture failed' })
-    } finally {
-      setCapturing(false)
+      setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Capture failed' })
+      setPhase('result')
     }
   }
 
@@ -83,76 +102,118 @@ export function Capture(_props: RouteProps) {
     setApplying(true)
     try {
       const applied = await api.reconcileApply(pendingDiff.location_code, pendingDiff.asset_tags)
-      setFeedback({ kind: 'reconciled', diff: applied })
-      setPendingDiff(null)
+      setResult({ kind: 'reconciled', diff: applied })
     } catch (err) {
-      setFeedback({ kind: 'error', message: err instanceof ApiError ? err.message : 'Reconciliation failed' })
-      setPendingDiff(null)
+      setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Reconciliation failed' })
     } finally {
+      setPendingDiff(null)
       setApplying(false)
+      setPhase('result')
     }
   }
 
+  function onCancelReconcile() {
+    setPendingDiff(null)
+    setResult({ kind: 'reconcile-cancelled' })
+    setPhase('result')
+  }
+
+  function onClear() {
+    setFrozenFrameUrl(null)
+    setResult(null)
+    setPhase('live')
+  }
+
+  const showingFrozenFrame = phase === 'processing' || phase === 'result'
+
   return (
     <div class="capture-view">
-      <header class="app-header">
-        <span class="app-title">aiinventory</span>
-        <span class="app-header-user">
-          {currentUser.value?.username}
-          <a href="/search">Search</a>
-          <a href="/locations">Locations</a>
-          <a href="/duplicates">Duplicates</a>
-          <a href="/settings">Settings</a>
-          <button type="button" class="link-button" onClick={() => logout()}>
-            Sign out
-          </button>
-        </span>
-      </header>
+      <Header active="capture" />
 
       <main class="capture-body">
         <div class="camera-square">
           {cameraError ? (
             <p class="camera-error">{cameraError}</p>
+          ) : showingFrozenFrame && frozenFrameUrl ? (
+            <img src={frozenFrameUrl} alt="" class="camera-frozen-frame" />
           ) : (
             <video ref={videoRef} autoPlay playsInline muted class="camera-video" />
           )}
-
-          <button
-            type="button"
-            class="capture-button"
-            onClick={onCapture}
-            disabled={capturing || !!cameraError}
-            aria-label="Capture photo"
-          />
         </div>
 
-        {feedback.kind === 'success' && (
-          <p class="capture-feedback capture-feedback-success">
-            {feedback.response.item_was_new ? 'Created new item ' : 'Added photo to '}
-            <strong>{feedback.response.asset_tag}</strong>
-            {feedback.response.item_guess ? ` — ${feedback.response.item_guess}` : ''}
-          </p>
-        )}
-        {feedback.kind === 'reconciled' && (
-          <p class="capture-feedback capture-feedback-success">
-            Reconciled <strong>{feedback.diff.location_code}</strong>: +{feedback.diff.added.length} ~
-            {feedback.diff.moved.length} -{feedback.diff.removed.length}
-          </p>
-        )}
-        {feedback.kind === 'nothing-found' && (
-          <p class="capture-feedback capture-feedback-warning">
-            No asset tag or location code found — retake with the label clearly visible.
-          </p>
-        )}
-        {feedback.kind === 'error' && <p class="capture-feedback capture-feedback-error">{feedback.message}</p>}
+        <div class="capture-results">
+          {phase === 'processing' && !pendingDiff && <p class="capture-feedback">Analyzing photo…</p>}
+
+          {result?.kind === 'item' && (
+            <div class="capture-result-card">
+              <div class="capture-result-header">
+                <a href={`/items/${result.itemId}`} class="capture-result-tag">
+                  {result.assetTag}
+                </a>
+                <span class="capture-result-action">{result.itemWasNew ? 'Added new item' : 'Added new photo'}</span>
+              </div>
+              {result.guess && <p class="capture-result-guess">{result.guess}</p>}
+              <p class="capture-result-description">{result.description || <em>No notes read from this photo.</em>}</p>
+              <p class="capture-result-hint">Tap the button below to capture another photo.</p>
+            </div>
+          )}
+
+          {result?.kind === 'reconciled' && (
+            <div class="capture-result-card">
+              <div class="capture-result-header">
+                <span class="capture-result-tag">{result.diff.location_code}</span>
+                <span class="capture-result-action">Reconciled location</span>
+              </div>
+              <ul class="capture-result-diff-list">
+                {result.diff.added.map((tag) => (
+                  <li class="diff-added" key={`a-${tag}`}>
+                    + {tag} added
+                  </li>
+                ))}
+                {result.diff.moved.map((m) => (
+                  <li class="diff-moved" key={`m-${m.asset_tag}`}>
+                    ~ {m.asset_tag} moved{m.from_location ? ` (was ${m.from_location})` : ''}
+                  </li>
+                ))}
+                {result.diff.removed.map((tag) => (
+                  <li class="diff-removed" key={`r-${tag}`}>
+                    - {tag} removed
+                  </li>
+                ))}
+              </ul>
+              <p class="capture-result-hint">Tap the button below to capture another photo.</p>
+            </div>
+          )}
+
+          {result?.kind === 'reconcile-cancelled' && (
+            <p class="capture-feedback capture-feedback-warning">Reconciliation cancelled.</p>
+          )}
+          {result?.kind === 'nothing' && (
+            <p class="capture-feedback capture-feedback-warning">
+              No asset tag or location code found — retake with the label clearly visible.
+            </p>
+          )}
+          {result?.kind === 'error' && <p class="capture-feedback capture-feedback-error">{result.message}</p>}
+        </div>
       </main>
+
+      <button
+        type="button"
+        class="capture-button"
+        onClick={phase === 'result' ? onClear : onCapture}
+        disabled={phase === 'processing' || (phase === 'live' && !!cameraError)}
+        aria-label={phase === 'result' ? 'Clear and capture another photo' : 'Capture photo'}
+      >
+        {phase === 'processing' && <span class="capture-spinner" />}
+        {phase === 'result' && <span aria-hidden="true">✕</span>}
+      </button>
 
       {pendingDiff && (
         <ReconcileDiff
           diff={pendingDiff}
           applying={applying}
           onApprove={onApproveReconcile}
-          onCancel={() => setPendingDiff(null)}
+          onCancel={onCancelReconcile}
         />
       )}
     </div>

@@ -24,9 +24,9 @@ export function App() {
 
   return (
     <Router>
-      <Capture path="/" />
-      <Capture path="/capture" default />
-      <Search path="/search" />
+      <Search path="/" />
+      <Search path="/search" default />
+      <Capture path="/capture" />
       <Settings path="/settings" />
       <ItemDetail path="/items/:id" />
       <LocationView path="/locations" />

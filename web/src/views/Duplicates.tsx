@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { api, ApiError, type DuplicateGroup, type Location } from '../api/client'
-import { currentUser, logout } from '../state/auth'
+import { Header } from '../components/Header'
 
 interface RouteProps {
   path?: string
@@ -110,19 +110,7 @@ export function Duplicates(_props: RouteProps) {
 
   return (
     <div class="duplicates-view">
-      <header class="app-header">
-        <span class="app-title">aiinventory</span>
-        <span class="app-header-user">
-          {currentUser.value?.username}
-          <a href="/capture">Capture</a>
-          <a href="/search">Search</a>
-          <a href="/locations">Locations</a>
-          <a href="/settings">Settings</a>
-          <button type="button" class="link-button" onClick={() => logout()}>
-            Sign out
-          </button>
-        </span>
-      </header>
+      <Header active="duplicates" />
 
       <main class="duplicates-body">
         <div class="duplicates-toolbar">

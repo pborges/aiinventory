@@ -104,6 +104,26 @@ func (s *Store) ListImageMetaByItem(ctx context.Context, itemID int64) ([]domain
 	return images, rows.Err()
 }
 
+// DeleteImage removes a single image from itemID. Unlike deleting an item,
+// this doesn't free anything for reuse and doesn't touch the item's
+// description — it's a plain "remove this one bad/duplicate photo" action
+// from the item detail view. Scoped to itemID so a caller can't delete an
+// image belonging to a different item by guessing its ID.
+func (s *Store) DeleteImage(ctx context.Context, itemID, imageID int64) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM images WHERE id = ? AND item_id = ?`, imageID, itemID)
+	if err != nil {
+		return fmt.Errorf("delete image: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ReorderImages sets sort_order to match the given order of imageIDs (all
 // of which must belong to itemID) — the item detail view's drag-to-reorder
 // carousel, where the first image becomes the primary image.
