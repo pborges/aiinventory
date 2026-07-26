@@ -20,7 +20,7 @@ type ReconcileReadStore interface {
 // ComputeReconciliation is the pure, read-only half of README flow #2: given
 // a location code and the set of asset tags Gemini read from the same
 // frame, it classifies every change against the location's current
-// contents (added / moved-from-elsewhere / removed) without writing
+// contents (new / added / moved-from-elsewhere / removed) without writing
 // anything. This is what the frontend shows for approval before the user
 // confirms — see internal/store.ApplyReconciliation for the write side.
 func ComputeReconciliation(ctx context.Context, s ReconcileReadStore, locationCode string, frameTags []string) (domain.ReconcileDiff, error) {
@@ -63,7 +63,9 @@ func ComputeReconciliation(ctx context.Context, s ReconcileReadStore, locationCo
 		item, err := s.GetItemByAssetTag(ctx, tag)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
-				// frame shows a tag that's never been captured as an item; nothing to reconcile
+				// frame shows a tag that's never been captured as an item anywhere;
+				// treat it as a new item to be created and linked to this location
+				diff.New = append(diff.New, tag)
 				continue
 			}
 			return domain.ReconcileDiff{}, fmt.Errorf("look up item %s: %w", tag, err)

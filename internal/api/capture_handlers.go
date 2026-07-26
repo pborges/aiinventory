@@ -62,7 +62,7 @@ func readUploadedImage(r *http.Request) (data []byte, contentType string, err er
 // which calls handleCaptureApply with the same image plus the asset tag/
 // description this endpoint returned.
 func (s *Server) handleCapturePreview(w http.ResponseWriter, r *http.Request) {
-	if s.gemini == nil {
+	if s.geminiClient() == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (GEMINI_API_KEY not configured)")
 		return
 	}
@@ -84,7 +84,7 @@ func (s *Server) handleCapturePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	analysis, err := s.gemini.AnalyzeTagCapture(ctx, model, prompt, data, contentType)
+	analysis, err := s.geminiClient().AnalyzeTagCapture(ctx, model, prompt, data, contentType)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "gemini request failed: "+err.Error())
 		return

@@ -62,12 +62,14 @@ export interface PromptSetting {
 }
 
 export interface Settings {
+  gemini_api_key_set: boolean
   gemini_model: string
   gemini_model_default: string
   prompts: Record<string, PromptSetting>
 }
 
 export interface SettingsUpdate {
+  gemini_api_key?: string
   gemini_model?: string
   prompts?: Record<string, string>
 }
@@ -98,6 +100,7 @@ export interface ReconcileDiffResponse {
   has_location_code: boolean
   location_code?: string
   asset_tags: string[]
+  new: string[]
   added: string[]
   moved: MovedItem[]
   removed: string[]
@@ -115,21 +118,8 @@ export interface SearchFilters {
   q?: string
   noDescription?: boolean
   noLocation?: boolean
+  noPhoto?: boolean
   locationId?: number
-}
-
-export interface DescriptionBatchItem {
-  item_id: number
-  asset_tag: string
-  hint?: string
-  status: 'pending' | 'generating' | 'done' | 'error'
-  description?: string
-  error?: string
-}
-
-export interface DescriptionBatchStatus {
-  running: boolean
-  items: DescriptionBatchItem[]
 }
 
 export interface ItemImage {
@@ -185,6 +175,7 @@ export interface DuplicateGroup {
 }
 
 export const api = {
+  version: () => request<{ version: string }>('GET', '/api/version'),
   bootstrapStatus: () => request<{ needed: boolean }>('GET', '/api/auth/bootstrap'),
   bootstrap: (username: string, password: string) =>
     request<{ user: User }>('POST', '/api/auth/bootstrap', { username, password }),
@@ -221,15 +212,12 @@ export const api = {
     if (filters.q) params.set('q', filters.q)
     if (filters.noDescription) params.set('no_description', '1')
     if (filters.noLocation) params.set('no_location', '1')
+    if (filters.noPhoto) params.set('no_photo', '1')
     if (filters.locationId != null) params.set('location_id', String(filters.locationId))
     const qs = params.toString()
     return request<{ items: ItemSummary[] }>('GET', '/api/search' + (qs ? `?${qs}` : ''))
   },
   bulkDelete: (itemIds: number[]) => request<{ deleted: number }>('POST', '/api/items/bulk-delete', { item_ids: itemIds }),
-  startBulkRegenerateDescription: (items: { item_id: number; hint: string }[]) =>
-    request<void>('POST', '/api/items/bulk-regenerate-description', { items }),
-  bulkRegenerateDescriptionStatus: () =>
-    request<DescriptionBatchStatus>('GET', '/api/items/bulk-regenerate-description/status'),
   getItem: (id: number) => request<ItemDetail>('GET', `/api/items/${id}`),
   updateItemDescription: (id: number, description: string) =>
     request<ItemDetail>('PUT', `/api/items/${id}`, { description }),

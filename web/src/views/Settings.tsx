@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { api, ApiError, type Settings as SettingsData, type UserListItem } from '../api/client'
 import { currentUser } from '../state/auth'
 import { Header } from '../components/Header'
+import { Footer } from '../components/Footer'
 
 interface RouteProps {
   path?: string
@@ -28,6 +29,7 @@ const MODEL_SUGGESTIONS = [
 
 export function Settings(_props: RouteProps) {
   const [data, setData] = useState<SettingsData | null>(null)
+  const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('')
   const [overrides, setOverrides] = useState<Record<string, string>>({})
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -69,8 +71,27 @@ export function Settings(_props: RouteProps) {
     setStatus('saving')
     setErrorMsg(null)
     try {
-      const updated = await api.updateSettings({ gemini_model: model, prompts: overrides })
+      const updated = await api.updateSettings({
+        gemini_model: model,
+        prompts: overrides,
+        ...(apiKey ? { gemini_api_key: apiKey } : {}),
+      })
       setData(updated)
+      setApiKey('')
+      setStatus('saved')
+    } catch (err) {
+      setErrorMsg(err instanceof ApiError ? err.message : 'Something went wrong')
+      setStatus('error')
+    }
+  }
+
+  async function onClearApiKey() {
+    setStatus('saving')
+    setErrorMsg(null)
+    try {
+      const updated = await api.updateSettings({ gemini_api_key: '' })
+      setData(updated)
+      setApiKey('')
       setStatus('saved')
     } catch (err) {
       setErrorMsg(err instanceof ApiError ? err.message : 'Something went wrong')
@@ -121,6 +142,22 @@ export function Settings(_props: RouteProps) {
             <form class="settings-form" onSubmit={onSave}>
               <section>
                 <h2>Gemini configuration</h2>
+                <label class="settings-field">
+                  API key
+                  <input
+                    type="password"
+                    autocomplete="off"
+                    value={apiKey}
+                    placeholder={data.gemini_api_key_set ? 'Configured — enter a new key to replace it' : 'Not configured'}
+                    onInput={(e) => setApiKey((e.target as HTMLInputElement).value)}
+                  />
+                </label>
+                {data.gemini_api_key_set && (
+                  <button type="button" class="link-button" onClick={onClearApiKey} disabled={status === 'saving'}>
+                    Clear API key
+                  </button>
+                )}
+
                 <label class="settings-field">
                   Model
                   <input
@@ -218,6 +255,8 @@ export function Settings(_props: RouteProps) {
           Close
         </button>
       </dialog>
+
+      <Footer />
     </div>
   )
 }

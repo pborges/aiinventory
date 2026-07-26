@@ -11,6 +11,7 @@ type SearchParams struct {
 	Query         string // free-text FTS query; "" means no text search, filters only
 	NoDescription bool
 	NoLocation    bool
+	NoPhoto       bool
 	LocationID    *int64
 }
 
@@ -38,7 +39,7 @@ const itemSummarySelect = `
 // search" section for the rationale), unioned by item so a hit on either an
 // item's consolidated description or a not-yet-consolidated per-image note
 // surfaces the same item. Combinable with the no-description/no-location/
-// specific-location filters.
+// no-photo/specific-location filters.
 func (s *Store) SearchItems(ctx context.Context, params SearchParams) ([]ItemSummary, error) {
 	var filterArgs []any
 	filterClause := buildFilterClause(params, &filterArgs)
@@ -107,6 +108,9 @@ func buildFilterClause(params SearchParams, args *[]any) string {
 	}
 	if params.NoLocation {
 		conds = append(conds, "items.location_id IS NULL")
+	}
+	if params.NoPhoto {
+		conds = append(conds, "NOT EXISTS (SELECT 1 FROM images WHERE images.item_id = items.id)")
 	}
 	if params.LocationID != nil {
 		conds = append(conds, "items.location_id = ?")

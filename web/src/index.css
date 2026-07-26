@@ -25,9 +25,15 @@ body,
 
 .auth-gate {
   display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.auth-gate-body {
+  flex: 1;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100dvh;
   padding: 1rem;
 }
 
@@ -135,6 +141,15 @@ body,
 
 .app-nav-button {
   font: inherit;
+}
+
+.app-footer {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  font-size: 0.7rem;
+  opacity: 0.5;
+  text-align: center;
 }
 
 /* Mobile: search is a primary, full-viewport, no-scroll surface (see README).
@@ -362,8 +377,9 @@ body,
    pair (Cancel to the left) once a tag preview is awaiting a decision. */
 .capture-controls {
   position: fixed;
-  right: max(1.25rem, env(safe-area-inset-right));
+  left: 50%;
   bottom: max(1.25rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
   z-index: 20;
   display: flex;
   align-items: center;
@@ -551,12 +567,65 @@ a.capture-result-tag:hover {
   list-style: none;
   padding: 0;
   margin: 0;
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 0.95rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 50vh;
+  overflow-y: auto;
 }
 
-.reconcile-diff-list li {
-  padding: 0.15rem 0;
+.reconcile-diff-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-left: 3px solid currentColor;
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.9rem;
+}
+
+.reconcile-diff-kind {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.reconcile-diff-tag {
+  font-weight: 600;
+}
+
+.reconcile-diff-detail {
+  opacity: 0.7;
+  font-size: 0.8rem;
+}
+
+.reconcile-diff-dismiss {
+  margin-left: auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.2rem 0.35rem;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.reconcile-diff-dismiss:hover {
+  opacity: 1;
+}
+
+.reconcile-diff-dismiss:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.diff-new {
+  color: #2b6cb0;
 }
 
 .diff-added {

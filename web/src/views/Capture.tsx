@@ -3,6 +3,7 @@ import { api, ApiError, type ReconcileDiffResponse } from '../api/client'
 import { captureSquareFrame } from '../lib/camera'
 import { ReconcileDiff } from '../components/ReconcileDiff'
 import { Header } from '../components/Header'
+import { Footer } from '../components/Footer'
 
 interface RouteProps {
   path?: string
@@ -123,11 +124,11 @@ export function Capture(_props: RouteProps) {
     }
   }
 
-  async function onApproveReconcile() {
+  async function onApproveReconcile(assetTags: string[]) {
     if (!pendingDiff?.location_code) return
     setApplyingReconcile(true)
     try {
-      await api.reconcileApply(pendingDiff.location_code, pendingDiff.asset_tags)
+      await api.reconcileApply(pendingDiff.location_code, assetTags)
       setPendingDiff(null)
       setApplyingReconcile(false)
       resetToLive() // applied successfully — clear everything and go straight back to a live, ready-to-shoot camera
@@ -236,6 +237,8 @@ export function Capture(_props: RouteProps) {
           onCancel={onCancelReconcile}
         />
       )}
+
+      <Footer />
     </div>
   )
 }

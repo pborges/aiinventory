@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { api, ApiError, type DuplicateGroup, type Location } from '../api/client'
 import { Header } from '../components/Header'
+import { Footer } from '../components/Footer'
 
 interface RouteProps {
   path?: string
@@ -169,6 +170,8 @@ export function Duplicates(_props: RouteProps) {
           ))}
         </ul>
       </main>
+
+      <Footer />
     </div>
   )
 }

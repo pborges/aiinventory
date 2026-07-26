@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { route } from 'preact-router'
 import { api, ApiError, type ItemDetail as ItemDetailData } from '../api/client'
 import { Header } from '../components/Header'
+import { Footer } from '../components/Footer'
 
 interface RouteProps {
   path?: string
@@ -266,6 +267,8 @@ export function ItemDetail({ id }: RouteProps) {
           </>
         )}
       </dialog>
+
+      <Footer />
     </div>
   )
 }

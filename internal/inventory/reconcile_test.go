@@ -113,15 +113,19 @@ func TestComputeReconciliation_AddedMovedRemoved(t *testing.T) {
 	}
 }
 
-func TestComputeReconciliation_UnknownFrameTagIgnored(t *testing.T) {
+func TestComputeReconciliation_UnknownFrameTagIsNew(t *testing.T) {
 	f := newFakeReconcileStore()
-	// "NOPE" was never captured as an item — should be silently skipped, not erred
+	// "NOPE" was never captured as an item — it should be classified as New,
+	// not silently dropped nor treated as Added (no item exists yet to relink)
 	diff, err := ComputeReconciliation(context.Background(), f, "@XYZ", []string{"NOPE"})
 	if err != nil {
 		t.Fatalf("ComputeReconciliation: %v", err)
 	}
+	if !reflect.DeepEqual(diff.New, []string{"NOPE"}) {
+		t.Errorf("New = %v, want [NOPE]", diff.New)
+	}
 	if len(diff.Added) != 0 || len(diff.Moved) != 0 || len(diff.Removed) != 0 {
-		t.Errorf("expected an empty diff for an unknown tag, got %+v", diff)
+		t.Errorf("expected only New for an unknown tag, got %+v", diff)
 	}
 }
 

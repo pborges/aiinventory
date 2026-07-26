@@ -21,6 +21,7 @@ type reconcileDiffResponse struct {
 	// AssetTags is the raw list Gemini read from the frame — the frontend
 	// echoes it back verbatim to /api/reconcile/apply once the user approves.
 	AssetTags []string            `json:"asset_tags"`
+	New       []string            `json:"new"`
 	Added     []string            `json:"added"`
 	Moved     []movedItemResponse `json:"moved"`
 	Removed   []string            `json:"removed"`
@@ -30,6 +31,10 @@ func toReconcileDiffResponse(diff domain.ReconcileDiff, assetTags []string) reco
 	moved := make([]movedItemResponse, 0, len(diff.Moved))
 	for _, m := range diff.Moved {
 		moved = append(moved, movedItemResponse{AssetTag: m.AssetTag, FromLocation: m.FromLocation})
+	}
+	newTags := diff.New
+	if newTags == nil {
+		newTags = []string{}
 	}
 	added := diff.Added
 	if added == nil {
@@ -46,6 +51,7 @@ func toReconcileDiffResponse(diff domain.ReconcileDiff, assetTags []string) reco
 		HasLocationCode: true,
 		LocationCode:    diff.LocationCode,
 		AssetTags:       assetTags,
+		New:             newTags,
 		Added:           added,
 		Moved:           moved,
 		Removed:         removed,
@@ -57,8 +63,8 @@ func toReconcileDiffResponse(diff domain.ReconcileDiff, assetTags []string) reco
 // and the resulting diff is returned for the user to approve — nothing is
 // written yet.
 func (s *Server) handleReconcilePreview(w http.ResponseWriter, r *http.Request) {
-	if s.gemini == nil {
-		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (GEMINI_API_KEY not configured)")
+	if s.geminiClient() == nil {
+		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (configure a Gemini API key in Settings)")
 		return
 	}
 	if _, ok := auth.CurrentUser(r.Context()); !ok {
@@ -94,7 +100,7 @@ func (s *Server) handleReconcilePreview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	analysis, err := s.gemini.AnalyzeReconciliation(ctx, model, prompt, data, contentType)
+	analysis, err := s.geminiClient().AnalyzeReconciliation(ctx, model, prompt, data, contentType)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "gemini request failed: "+err.Error())
 		return

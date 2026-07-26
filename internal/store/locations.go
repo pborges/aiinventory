@@ -121,8 +121,10 @@ func (s *Store) SetItemLocation(ctx context.Context, itemID int64, locationID *i
 }
 
 // ApplyReconciliation atomically applies an already-computed diff (see
-// internal/inventory.ComputeReconciliation): updates every affected item's
-// location and writes one activity entry per change plus a summary entry
+// internal/inventory.ComputeReconciliation): creates an item for every
+// asset tag seen in the frame that never matched an existing item (linked
+// straight to this location, no photo), updates every affected item's
+// location, and writes one activity entry per change plus a summary entry
 // for the location itself. All-or-nothing — a partial failure rolls back
 // rather than leaving some items moved and others not.
 func (s *Store) ApplyReconciliation(ctx context.Context, userID int64, diff domain.ReconcileDiff) error {
@@ -156,6 +158,31 @@ func (s *Store) ApplyReconciliation(ctx context.Context, userID int64, diff doma
 			return err
 		}
 
+		for _, tag := range diff.New {
+			res, err := tx.ExecContext(ctx, `INSERT INTO items (asset_tag, location_id) VALUES (?, ?)`, tag, locationID)
+			if err != nil {
+				if isUniqueConstraintErr(err) {
+					// lost a create race (e.g. a concurrent tag-capture claimed this
+					// tag between preview and apply) — the item exists now, just link it
+					if err := relink(tag, fmt.Sprintf("added to %s", diff.LocationCode)); err != nil {
+						return err
+					}
+					continue
+				}
+				return fmt.Errorf("create item %s: %w", tag, err)
+			}
+			itemID, err := res.LastInsertId()
+			if err != nil {
+				return fmt.Errorf("create item %s: %w", tag, err)
+			}
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO activity (user_id, action, item_id, location_id, detail) VALUES (?, ?, ?, ?, ?)`,
+				userID, string(domain.ActivityItemCreated), itemID, locationID,
+				fmt.Sprintf("created via location scan at %s", diff.LocationCode)); err != nil {
+				return err
+			}
+		}
+
 		for _, tag := range diff.Added {
 			if err := relink(tag, fmt.Sprintf("added to %s", diff.LocationCode)); err != nil {
 				return err
@@ -186,7 +213,7 @@ func (s *Store) ApplyReconciliation(ctx context.Context, userID int64, diff doma
 			}
 		}
 
-		summary := fmt.Sprintf("+%d ~%d -%d", len(diff.Added), len(diff.Moved), len(diff.Removed))
+		summary := fmt.Sprintf("*%d +%d ~%d -%d", len(diff.New), len(diff.Added), len(diff.Moved), len(diff.Removed))
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO activity (user_id, action, location_id, detail) VALUES (?, ?, ?, ?)`,
 			userID, string(domain.ActivityLocationReconciled), locationID, summary)

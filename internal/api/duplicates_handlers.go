@@ -36,8 +36,8 @@ func (s *Server) handleDuplicatesStatus(w http.ResponseWriter, r *http.Request) 
 // independent of this request, since the request's context is cancelled
 // the moment this handler returns.
 func (s *Server) handleStartDuplicateRun(w http.ResponseWriter, r *http.Request) {
-	if s.gemini == nil {
-		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (GEMINI_API_KEY not configured)")
+	if s.geminiClient() == nil {
+		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (configure a Gemini API key in Settings)")
 		return
 	}
 	user, ok := auth.CurrentUser(r.Context())
@@ -59,10 +59,11 @@ func (s *Server) handleStartDuplicateRun(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	client := s.geminiClient()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		if err := inventory.RunDetection(ctx, s.store, s.gemini, s.duplicateRunner, user.ID, model, prompt); err != nil {
+		if err := inventory.RunDetection(ctx, s.store, client, s.duplicateRunner, user.ID, model, prompt); err != nil {
 			log.Printf("duplicate finder run failed: %v", err)
 		}
 	}()

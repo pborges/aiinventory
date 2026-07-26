@@ -13,9 +13,12 @@ import (
 	"github.com/pborges/aiinventory/internal/gemini"
 	"github.com/pborges/aiinventory/internal/store"
 	"github.com/pborges/aiinventory/internal/tlscert"
+	"github.com/pborges/aiinventory/internal/version"
 )
 
 func main() {
+	log.Printf("aiinventory %s", version.Version)
+
 	cfg := config.Load()
 	ctx := context.Background()
 
@@ -36,10 +39,15 @@ func main() {
 	}
 	codec := auth.NewCodec(sessionSecret)
 
+	geminiAPIKey, _, err := db.GetSetting(ctx, store.SettingGeminiAPIKey)
+	if err != nil {
+		log.Fatalf("resolve gemini api key: %v", err)
+	}
+
 	var geminiClient gemini.Client
-	if cfg.GeminiAPIKey == "" {
-		log.Printf("GEMINI_API_KEY not set; AI-dependent features are disabled")
-	} else if gc, err := gemini.NewGenAIClient(ctx, cfg.GeminiAPIKey); err != nil {
+	if geminiAPIKey == "" {
+		log.Printf("no Gemini API key configured; AI-dependent features are disabled until one is set in Settings")
+	} else if gc, err := gemini.NewGenAIClient(ctx, geminiAPIKey); err != nil {
 		log.Printf("gemini client unavailable, AI-dependent features are disabled: %v", err)
 	} else {
 		geminiClient = gc

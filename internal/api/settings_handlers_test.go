@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/pborges/aiinventory/internal/gemini"
@@ -35,6 +36,9 @@ func TestSettingsDefaultsBeforeAnyOverride(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
+	if resp.GeminiAPIKeySet {
+		t.Error("GeminiAPIKeySet = true, want false (no key configured yet)")
+	}
 	if resp.GeminiModel != "" {
 		t.Errorf("GeminiModel = %q, want empty (no override set yet)", resp.GeminiModel)
 	}
@@ -89,6 +93,44 @@ func TestSettingsUpdateRoundTrips(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&resp)
 	if resp.GeminiModel != "gemini-2.5-pro" {
 		t.Errorf("after reload, GeminiModel = %q, want gemini-2.5-pro", resp.GeminiModel)
+	}
+}
+
+func TestSettingsGeminiAPIKeySetAndClear(t *testing.T) {
+	h, cookies := loggedInServer(t)
+
+	// setting a key persists it and flips gemini_api_key_set, but never
+	// echoes the raw value back
+	w := doJSON(t, h, http.MethodPut, "/api/settings", updateSettingsRequest{GeminiAPIKey: strPtr("test-key-123")}, cookies)
+	if w.Code != http.StatusOK {
+		t.Fatalf("PUT status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp settingsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.GeminiAPIKeySet {
+		t.Error("GeminiAPIKeySet = false after setting a key, want true")
+	}
+	if raw := w.Body.String(); strings.Contains(raw, "test-key-123") {
+		t.Error("response body echoes the raw api key back")
+	}
+
+	// a fresh GET still reports it as set (persisted, not just echoed)
+	w = doJSON(t, h, http.MethodGet, "/api/settings", nil, cookies)
+	json.NewDecoder(w.Body).Decode(&resp)
+	if !resp.GeminiAPIKeySet {
+		t.Error("after reload, GeminiAPIKeySet = false, want true")
+	}
+
+	// clearing it (empty string, not omitted) unsets it again
+	w = doJSON(t, h, http.MethodPut, "/api/settings", updateSettingsRequest{GeminiAPIKey: strPtr("")}, cookies)
+	if w.Code != http.StatusOK {
+		t.Fatalf("PUT status = %d, body = %s", w.Code, w.Body.String())
+	}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.GeminiAPIKeySet {
+		t.Error("GeminiAPIKeySet = true after clearing, want false")
 	}
 }
 

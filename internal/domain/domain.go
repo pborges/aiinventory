@@ -44,6 +44,7 @@ type Image struct {
 // consume it without depending on inventory.
 type ReconcileDiff struct {
 	LocationCode string
+	New          []string    // asset tags with no matching item anywhere — a new item is created and linked here
 	Added        []string    // asset tags newly linked to this location
 	Moved        []MovedItem // asset tags moved here from a different location
 	Removed      []string    // asset tags no longer in the frame, unlinked from this location

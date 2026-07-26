@@ -222,8 +222,8 @@ type regenerateItemDescriptionRequest struct {
 // JSON body with a "hint" field to steer this specific run; an empty/absent
 // body means no hint.
 func (s *Server) handleRegenerateItemDescription(w http.ResponseWriter, r *http.Request) {
-	if s.gemini == nil {
-		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (GEMINI_API_KEY not configured)")
+	if s.geminiClient() == nil {
+		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (configure a Gemini API key in Settings)")
 		return
 	}
 	user, ok := auth.CurrentUser(r.Context())
@@ -252,7 +252,7 @@ func (s *Server) handleRegenerateItemDescription(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if _, err := inventory.RegenerateDescription(ctx, s.store, s.gemini, user.ID, model, prompt, id, req.Hint); err != nil {
+	if _, err := inventory.RegenerateDescription(ctx, s.store, s.geminiClient(), user.ID, model, prompt, id, req.Hint); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
 			return

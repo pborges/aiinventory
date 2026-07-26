@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { api, ApiError, type ItemSummary } from '../api/client'
 import { Header } from '../components/Header'
+import { Footer } from '../components/Footer'
 import { GenerateDescriptionsModal } from '../components/GenerateDescriptionsModal'
 
 interface RouteProps {
@@ -22,6 +23,7 @@ export function Search(_props: RouteProps) {
   const [query, setQuery] = useState('')
   const [noDescription, setNoDescription] = useState(false)
   const [noLocation, setNoLocation] = useState(false)
+  const [noPhoto, setNoPhoto] = useState(false)
   const [locationFilter, setLocationFilter] = useState(() => parseLocationFilterFromURL())
   const [items, setItems] = useState<ItemSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -36,7 +38,7 @@ export function Search(_props: RouteProps) {
     setLoading(true)
     setError(null)
     api
-      .search({ q: query || undefined, noDescription, noLocation, locationId: locationFilter?.id })
+      .search({ q: query || undefined, noDescription, noLocation, noPhoto, locationId: locationFilter?.id })
       .then((res) => {
         setItems(res.items)
         setSelected(new Set())
@@ -52,7 +54,7 @@ export function Search(_props: RouteProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, noDescription, noLocation, locationFilter])
+  }, [query, noDescription, noLocation, noPhoto, locationFilter])
 
   function toggleSelected(id: number) {
     setSelected((prev) => {
@@ -119,6 +121,14 @@ export function Search(_props: RouteProps) {
             />
             No location
           </label>
+          <label class="search-filter">
+            <input
+              type="checkbox"
+              checked={noPhoto}
+              onChange={(e) => setNoPhoto((e.target as HTMLInputElement).checked)}
+            />
+            No photo
+          </label>
           {locationFilter && (
             <span class="search-location-chip">
               📍 {locationFilter.code || `location #${locationFilter.id}`}
@@ -179,6 +189,8 @@ export function Search(_props: RouteProps) {
           onComplete={runSearch}
         />
       )}
+
+      <Footer />
     </div>
   )
 }

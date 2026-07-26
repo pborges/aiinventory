@@ -86,6 +86,47 @@ func TestApplyReconciliation(t *testing.T) {
 	}
 }
 
+func TestApplyReconciliationNew(t *testing.T) {
+	ctx := context.Background()
+	s := NewTestStore(t)
+	user, _ := s.CreateFirstUser(ctx, "alice", "hash")
+
+	diff := domain.ReconcileDiff{LocationCode: "@XYZ", New: []string{"NOPE"}}
+	if err := s.ApplyReconciliation(ctx, user.ID, diff); err != nil {
+		t.Fatalf("ApplyReconciliation: %v", err)
+	}
+
+	loc, err := s.GetLocationByCode(ctx, "@XYZ")
+	if err != nil {
+		t.Fatalf("GetLocationByCode @XYZ (should've been created): %v", err)
+	}
+
+	item, err := s.GetItemByAssetTag(ctx, "NOPE")
+	if err != nil {
+		t.Fatalf("GetItemByAssetTag NOPE (should've been created): %v", err)
+	}
+	if item.LocationID == nil || *item.LocationID != loc.ID {
+		t.Errorf("NOPE location = %v, want %d", item.LocationID, loc.ID)
+	}
+
+	images, err := s.ListImageMetaByItem(ctx, item.ID)
+	if err != nil {
+		t.Fatalf("ListImageMetaByItem: %v", err)
+	}
+	if len(images) != 0 {
+		t.Errorf("expected no photos for a reconciliation-created item, got %d", len(images))
+	}
+
+	activity, err := s.ListActivityForLocation(ctx, loc.ID)
+	if err != nil {
+		t.Fatalf("ListActivityForLocation: %v", err)
+	}
+	// one item_created entry plus one location_reconciled summary
+	if len(activity) != 2 {
+		t.Fatalf("got %d activity entries for @XYZ, want 2: %+v", len(activity), activity)
+	}
+}
+
 func TestApplyReconciliationRemoved(t *testing.T) {
 	ctx := context.Background()
 	s := NewTestStore(t)

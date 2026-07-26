@@ -11,6 +11,7 @@ import (
 
 // well-known settings keys
 const (
+	SettingGeminiAPIKey                  = "gemini_api_key"
 	SettingGeminiModel                   = "gemini_model"
 	SettingSessionSecret                 = "session_secret"
 	SettingPromptTagCapture              = "prompt.tag_capture"

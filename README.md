@@ -37,6 +37,7 @@ A **location code** is `@` followed by 3 uppercase-alpha-only characters (e.g. `
 
 A frame containing a location code is treated differently: Gemini reads the location code plus every asset tag visible in the same frame, and the app computes a **reconciliation diff** against the location's current contents:
 
+- Asset tags in the frame that don't match any existing item anywhere → **new** item created (no photo) and linked to this location
 - Asset tags in the frame but not currently linked to this location → **added**
 - Asset tags currently linked to this location but absent from the frame → **removed**
 - Asset tags in the frame that are currently linked to a *different* location → **moved** to this location
@@ -45,10 +46,13 @@ The user is shown a git-diff-style summary and must explicitly approve or cancel
 
 ```diff
 Reconciling @XYZ
+* WXYZ new item created
 + ZKEI added
 ~ GKEI moved (was @QRS)
 - XDKW removed
 ```
+
+A new item created this way has no photo yet — it shows up in search with an asset-tag placeholder thumbnail instead of an image, findable via the **no photo** filter (see [search filters](#3-search--bulk-actions)) until someone captures a real photo of it later via the tag-capture flow.
 
 Same preview-then-commit shape as tag capture: the diff is computed from a preview call and nothing is linked or unlinked until Approve is pressed. Approving clears the camera straight back to a live, ready-to-shoot state (same as a successful tag-capture Accept); Cancel discards the diff with no write and does the same.
 
@@ -60,6 +64,7 @@ Search is a primary view on **both** mobile and desktop — it's the fast path t
 
 - Items missing a description
 - Items with no location
+- Items with no photo
 - A specific location (also reachable by clicking a location badge from the item detail view)
 
 On mobile, search leans toward *finding*, not maintaining: type-ahead results rendered as image-and-description cards (primary photo + consolidated description, so you can visually confirm "yes, that's the drill I'm looking for" at a glance) rather than a dense data table. Tapping a result opens the item detail view. Bulk select/maintenance actions exist but are a secondary, desktop-first concern.
@@ -108,6 +113,7 @@ Primarily a desktop layout, but functional on mobile. Contains:
 An administrative page, split into two areas:
 
 **Gemini configuration**
+- An API key field — the Gemini API key lives in the `settings` table, not an environment variable, so it can be set/rotated/cleared from here without restarting the server. The key is set-only: once configured, the field never echoes the raw value back, only whether one is set. Saving a new key rebuilds the live Gemini client immediately; clearing it disables AI-dependent routes immediately.
 - A dropdown to pick which Gemini model the app uses for every request type (tag capture, location reconciliation, description regeneration, duplicate detection).
 - Each of those request types has its own **prompt override**: a text area where a custom prompt can be typed in to replace the app's built-in one for that request. Directly under the text area, a small link opens the app's **default prompt for that type in a shadowbox** — so you can see exactly what you're overriding (or copy it as a starting point) without leaving the page. **If the text area is left empty, the built-in default prompt is used** — overrides are opt-in per request type, not required.
 
@@ -289,7 +295,7 @@ WHERE images_fts MATCH ?;
 
 ## UI: mobile vs. desktop
 
-**Header/nav:** a single shared header on every view — a 📦 brand icon (links home, to search) followed by finger-friendly icon buttons for each section (📷 capture, 🔍 search, 🗺️ locations, 🧬 duplicates, ⚙️ settings, 🚪 sign out). No text hyperlinks, so the same header works as a thumb-friendly mobile toolbar and a desktop nav bar. **Search is the app's home page** (`/`) — the fastest path to "where is X," and the one flow that matters equally on both breakpoints.
+**Header/nav:** a single shared header on every view — a 📦 brand icon (links home, to search) followed by finger-friendly icon buttons for each section (📷 capture, 🔍 search, 🗺️ locations, 🧬 duplicates, ⚙️ settings, 🚪 sign out). No text hyperlinks, so the same header works as a thumb-friendly mobile toolbar and a desktop nav bar. **Search is the app's home page** (`/`) — the fastest path to "where is X," and the one flow that matters equally on both breakpoints. A matching **footer** on every view (including the sign-in screen) shows the running build's version, from `GET /api/version` — handy for confirming which image actually got deployed.
 
 - **Mobile (iPhone-optimized):** two primary, full-viewport, no-scroll surfaces — **camera capture** (ingest) and **search** (lookup, and the default landing view). Reconciliation diffs and capture feedback appear as overlays rather than pushing the camera off-screen. Mobile search favors image-and-description result cards for fast visual confirmation over dense tables or bulk maintenance.
 - **Desktop:** a denser, power-user layout — search adds filters, select-all, and bulk actions (delete, regenerate description); the location view adds a location sidebar, drag-to-move item cards, and a per-location activity footer; the duplicate finder runs a server-side scan and surfaces a resolvable report; the item edit view adds drag-to-reorder images and a per-item activity log. Built with the assumption of a mouse, keyboard, and a larger viewport — this is where items get maintained, not just found.
@@ -321,13 +327,12 @@ Running `go generate ./...` builds the frontend and refreshes the embedded asset
 
 ## Configuration
 
-Configured entirely via environment variables:
+Configured via environment variables, except the Gemini API key — that lives in the `settings` table and is set from the [Settings](#7-settings-desktop) page, not an env var, so it can be rotated without a restart:
 
 | Variable | Description | Default |
 |---|---|---|
 | `PORT` | HTTP(S) listen port | `8080` |
 | `DB_PATH` | Path to the SQLite database file | `./aiinventory.db` |
-| `GEMINI_API_KEY` | API key for Gemini vision requests | — (required) |
 | `TLS_ENABLED` | Serve HTTPS with a self-signed certificate | `false` |
 | `SESSION_SECRET` | Key used to cryptographically sign session cookies, so the server can tell a login cookie is genuine rather than forged by a client. Optional — if unset, a random value is generated on first boot and persisted in the `settings` table, so restarts keep working without you managing this by hand. Only set it explicitly if you want sessions to survive a fresh/replaced database. | auto-generated |
 
@@ -340,13 +345,32 @@ Prerequisites: Go 1.26+, Node + `pnpm`.
 go generate ./...
 
 # run the server
-GEMINI_API_KEY=... SESSION_SECRET=... go run ./cmd/aiinventory
+SESSION_SECRET=... go run ./cmd/aiinventory
 ```
 
 For local HTTPS (needed for camera access from a phone on your LAN):
 
 ```bash
-GEMINI_API_KEY=... SESSION_SECRET=... TLS_ENABLED=true go run ./cmd/aiinventory
+SESSION_SECRET=... TLS_ENABLED=true go run ./cmd/aiinventory
 ```
 
-Then open the app from your phone's browser and add it to your home screen for a full-screen, app-like experience.
+Then open the app from your phone's browser and add it to your home screen for a full-screen, app-like experience. On first run, bootstrap an account, then open **Settings** and set a Gemini API key to enable the AI-dependent flows (capture, reconciliation, description regeneration, duplicate finder) — everything else works without one.
+
+## Docker
+
+Tagged releases (`vX.Y.Z`) are built and published to GHCR by [`.github/workflows/docker.yml`](.github/workflows/docker.yml) as a `linux/amd64`-only Alpine image — the app has no other platform requirements (pure-Go SQLite driver, no cgo), amd64 is just the only architecture this project actually runs on, so that's all CI builds. The pushed git tag is embedded into the binary as its version (see [`internal/version`](internal/version/version.go)) and surfaced in the webui's footer and at `GET /api/version`.
+
+```bash
+docker run -d \
+  -p 8080:8080 \
+  -v aiinventory-data:/data \
+  ghcr.io/pborges/aiinventory:latest
+```
+
+The database lives at `/data/aiinventory.db` by default (`DB_PATH`) — mount a volume there to persist it across container restarts. Everything else is configured the same way as [Getting started](#getting-started): environment variables in, plus the Gemini key from the Settings page once it's up.
+
+To build the image locally (e.g. to test a change before tagging a release):
+
+```bash
+docker build --build-arg VERSION=dev-local -t aiinventory:dev .
+```

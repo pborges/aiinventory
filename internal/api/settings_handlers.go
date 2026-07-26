@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/pborges/aiinventory/internal/gemini"
 	"github.com/pborges/aiinventory/internal/store"
@@ -21,6 +22,7 @@ type promptSetting struct {
 }
 
 type settingsResponse struct {
+	GeminiAPIKeySet    bool                     `json:"gemini_api_key_set"`
 	GeminiModel        string                   `json:"gemini_model"`
 	GeminiModelDefault string                   `json:"gemini_model_default"`
 	Prompts            map[string]promptSetting `json:"prompts"`
@@ -38,6 +40,11 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) buildSettingsResponse(r *http.Request) (settingsResponse, error) {
 	ctx := r.Context()
 
+	apiKey, _, err := s.store.GetSetting(ctx, store.SettingGeminiAPIKey)
+	if err != nil {
+		return settingsResponse{}, err
+	}
+
 	model, _, err := s.store.GetSetting(ctx, store.SettingGeminiModel)
 	if err != nil {
 		return settingsResponse{}, err
@@ -53,6 +60,7 @@ func (s *Server) buildSettingsResponse(r *http.Request) (settingsResponse, error
 	}
 
 	return settingsResponse{
+		GeminiAPIKeySet:    apiKey != "",
 		GeminiModel:        model,
 		GeminiModelDefault: gemini.DefaultModel,
 		Prompts:            prompts,
@@ -60,8 +68,9 @@ func (s *Server) buildSettingsResponse(r *http.Request) (settingsResponse, error
 }
 
 type updateSettingsRequest struct {
-	GeminiModel *string           `json:"gemini_model"`
-	Prompts     map[string]string `json:"prompts"`
+	GeminiAPIKey *string           `json:"gemini_api_key"`
+	GeminiModel  *string           `json:"gemini_model"`
+	Prompts      map[string]string `json:"prompts"`
 }
 
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +81,27 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	// GeminiAPIKey is only present when the user actually typed a new value
+	// in Settings (see the webui's masked "set-only" field) — nil means
+	// "leave it alone", never "clear it".
+	if req.GeminiAPIKey != nil {
+		key := strings.TrimSpace(*req.GeminiAPIKey)
+		if err := s.store.SetSetting(ctx, store.SettingGeminiAPIKey, key); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		if key == "" {
+			s.setGeminiClient(nil)
+		} else {
+			client, err := gemini.NewGenAIClient(ctx, key)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "invalid gemini api key: "+err.Error())
+				return
+			}
+			s.setGeminiClient(client)
+		}
+	}
 
 	if req.GeminiModel != nil {
 		if err := s.store.SetSetting(ctx, store.SettingGeminiModel, *req.GeminiModel); err != nil {

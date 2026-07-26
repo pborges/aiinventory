@@ -4,6 +4,7 @@ package api
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/pborges/aiinventory/internal/auth"
 	"github.com/pborges/aiinventory/internal/gemini"
@@ -13,27 +14,29 @@ import (
 )
 
 type Server struct {
-	store            *store.Store
-	codec            *auth.Codec
-	gemini           gemini.Client // nil if GEMINI_API_KEY wasn't configured — AI-dependent routes handle that
-	duplicateRunner  *inventory.Runner
-	descriptionBatch *inventory.DescriptionBatch
+	store           *store.Store
+	codec           *auth.Codec
+	geminiMu        sync.RWMutex
+	gemini          gemini.Client // nil if no Gemini API key is configured (Settings) — AI-dependent routes handle that
+	duplicateRunner *inventory.Runner
 }
 
-// New assembles the HTTP handler. geminiClient may be nil if no
-// GEMINI_API_KEY was configured; routes that need it (capture, reconcile,
+// New assembles the HTTP handler. geminiClient may be nil if no Gemini API
+// key was configured yet; routes that need it (capture, reconcile,
 // description regeneration, duplicate detection) are responsible for
-// returning a clear error when it's nil.
+// returning a clear error when it's nil. The Settings page can swap it out
+// for a new client at runtime — see setGeminiClient.
 func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Handler {
 	srv := &Server{
-		store:            s,
-		codec:            codec,
-		gemini:           geminiClient,
-		duplicateRunner:  &inventory.Runner{},
-		descriptionBatch: &inventory.DescriptionBatch{},
+		store:           s,
+		codec:           codec,
+		gemini:          geminiClient,
+		duplicateRunner: &inventory.Runner{},
 	}
 
 	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /api/version", srv.handleVersion)
 
 	mux.HandleFunc("GET /api/auth/bootstrap", srv.handleBootstrapStatus)
 	mux.HandleFunc("POST /api/auth/bootstrap", srv.handleBootstrap)
@@ -52,8 +55,6 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Han
 
 	mux.Handle("GET /api/search", srv.requireAuth(srv.handleSearch))
 	mux.Handle("POST /api/items/bulk-delete", srv.requireAuth(srv.handleBulkDelete))
-	mux.Handle("POST /api/items/bulk-regenerate-description", srv.requireAuth(srv.handleBulkRegenerateDescription))
-	mux.Handle("GET /api/items/bulk-regenerate-description/status", srv.requireAuth(srv.handleBulkRegenerateDescriptionStatus))
 
 	mux.Handle("GET /api/images/{id}", srv.requireAuth(srv.handleGetImage))
 
@@ -85,4 +86,22 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Han
 
 func (s *Server) requireAuth(h http.HandlerFunc) http.Handler {
 	return auth.RequireAuth(s.codec, s.store)(h)
+}
+
+// geminiClient returns the currently configured Gemini client (nil if AI
+// features are disabled). Safe to call concurrently with setGeminiClient.
+func (s *Server) geminiClient() gemini.Client {
+	s.geminiMu.RLock()
+	defer s.geminiMu.RUnlock()
+	return s.gemini
+}
+
+// setGeminiClient swaps in a new Gemini client (or nil to disable AI
+// features), taking effect immediately for any request that hasn't already
+// captured the old one. Called by the Settings handler when the API key
+// changes.
+func (s *Server) setGeminiClient(c gemini.Client) {
+	s.geminiMu.Lock()
+	s.gemini = c
+	s.geminiMu.Unlock()
 }

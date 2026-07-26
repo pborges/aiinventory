@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 import { api, ApiError, type ActivityEntry, type Location, type LocationItem } from '../api/client'
 import { Header } from '../components/Header'
+import { Footer } from '../components/Footer'
 
 interface RouteProps {
   path?: string
@@ -143,6 +144,8 @@ export function LocationView(_props: RouteProps) {
           </ul>
         </footer>
       )}
+
+      <Footer />
     </div>
   )
 }

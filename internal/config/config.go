@@ -9,7 +9,6 @@ import (
 type Config struct {
 	Port          string
 	DBPath        string
-	GeminiAPIKey  string
 	TLSEnabled    bool
 	SessionSecret string
 }
@@ -18,7 +17,6 @@ func Load() Config {
 	return Config{
 		Port:          getEnv("PORT", "8080"),
 		DBPath:        getEnv("DB_PATH", "./aiinventory.db"),
-		GeminiAPIKey:  os.Getenv("GEMINI_API_KEY"),
 		TLSEnabled:    getEnvBool("TLS_ENABLED", false),
 		SessionSecret: os.Getenv("SESSION_SECRET"),
 	}
