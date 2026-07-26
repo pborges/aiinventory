@@ -6,17 +6,23 @@ import (
 	"net/http"
 
 	"github.com/pborges/aiinventory/internal/auth"
+	"github.com/pborges/aiinventory/internal/gemini"
 	"github.com/pborges/aiinventory/internal/store"
 	"github.com/pborges/aiinventory/internal/web"
 )
 
 type Server struct {
-	store *store.Store
-	codec *auth.Codec
+	store  *store.Store
+	codec  *auth.Codec
+	gemini gemini.Client // nil if GEMINI_API_KEY wasn't configured — AI-dependent routes handle that
 }
 
-func New(s *store.Store, codec *auth.Codec) http.Handler {
-	srv := &Server{store: s, codec: codec}
+// New assembles the HTTP handler. geminiClient may be nil if no
+// GEMINI_API_KEY was configured; routes that need it (capture, reconcile,
+// description regeneration, duplicate detection — added in later phases)
+// are responsible for returning a clear error when it's nil.
+func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Handler {
+	srv := &Server{store: s, codec: codec, gemini: geminiClient}
 
 	mux := http.NewServeMux()
 
@@ -25,6 +31,9 @@ func New(s *store.Store, codec *auth.Codec) http.Handler {
 	mux.HandleFunc("POST /api/auth/login", srv.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", srv.handleLogout)
 	mux.Handle("GET /api/auth/me", srv.requireAuth(srv.handleMe))
+
+	mux.Handle("GET /api/settings", srv.requireAuth(srv.handleGetSettings))
+	mux.Handle("PUT /api/settings", srv.requireAuth(srv.handleUpdateSettings))
 
 	mux.Handle("/", web.Handler())
 

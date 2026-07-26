@@ -35,6 +35,22 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (await res.json()) as T
 }
 
+export interface PromptSetting {
+  override: string
+  default: string
+}
+
+export interface Settings {
+  gemini_model: string
+  gemini_model_default: string
+  prompts: Record<string, PromptSetting>
+}
+
+export interface SettingsUpdate {
+  gemini_model?: string
+  prompts?: Record<string, string>
+}
+
 export const api = {
   bootstrapStatus: () => request<{ needed: boolean }>('GET', '/api/auth/bootstrap'),
   bootstrap: (username: string, password: string) =>
@@ -43,4 +59,6 @@ export const api = {
     request<{ user: User }>('POST', '/api/auth/login', { username, password }),
   logout: () => request<void>('POST', '/api/auth/logout'),
   me: () => request<{ user: User }>('GET', '/api/auth/me'),
+  getSettings: () => request<Settings>('GET', '/api/settings'),
+  updateSettings: (update: SettingsUpdate) => request<Settings>('PUT', '/api/settings', update),
 }

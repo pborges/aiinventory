@@ -9,6 +9,7 @@ import (
 	"github.com/pborges/aiinventory/internal/api"
 	"github.com/pborges/aiinventory/internal/auth"
 	"github.com/pborges/aiinventory/internal/config"
+	"github.com/pborges/aiinventory/internal/gemini"
 	"github.com/pborges/aiinventory/internal/store"
 )
 
@@ -33,7 +34,16 @@ func main() {
 	}
 	codec := auth.NewCodec(sessionSecret)
 
-	handler := api.New(db, codec)
+	var geminiClient gemini.Client
+	if cfg.GeminiAPIKey == "" {
+		log.Printf("GEMINI_API_KEY not set; AI-dependent features are disabled")
+	} else if gc, err := gemini.NewGenAIClient(ctx, cfg.GeminiAPIKey); err != nil {
+		log.Printf("gemini client unavailable, AI-dependent features are disabled: %v", err)
+	} else {
+		geminiClient = gc
+	}
+
+	handler := api.New(db, codec, geminiClient)
 
 	log.Printf("aiinventory listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {

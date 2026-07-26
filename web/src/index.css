@@ -132,3 +132,78 @@ body,
     padding: 2rem;
   }
 }
+
+/* --- settings (desktop-oriented, see README) --- */
+
+.settings-view {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.settings-form section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.settings-field label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.settings-field input,
+.settings-field textarea {
+  font: inherit;
+  padding: 0.5rem;
+  resize: vertical;
+}
+
+.settings-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.settings-actions button[type='submit'] {
+  padding: 0.5rem 1.25rem;
+  cursor: pointer;
+}
+
+.settings-status {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.settings-status-error {
+  color: #d33;
+  opacity: 1;
+}
+
+.prompt-shadowbox {
+  max-width: 640px;
+  width: 90vw;
+  border: none;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.prompt-shadowbox::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.prompt-shadowbox pre {
+  white-space: pre-wrap;
+  font-family: inherit;
+  max-height: 60vh;
+  overflow: auto;
+}

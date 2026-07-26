@@ -3,6 +3,7 @@ import Router from 'preact-router'
 import { currentUser, authLoading, initAuth } from './state/auth'
 import { AuthGate } from './views/AuthGate'
 import { Search } from './views/Search'
+import { Settings } from './views/Settings'
 
 export function App() {
   useEffect(() => {
@@ -21,6 +22,7 @@ export function App() {
     <Router>
       <Search path="/" />
       <Search path="/search" default />
+      <Settings path="/settings" />
     </Router>
   )
 }

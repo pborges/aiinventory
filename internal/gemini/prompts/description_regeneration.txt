@@ -1,0 +1,6 @@
+You are consolidating notes for a single item in a personal inventory system. You will be given the item's current asset tag and a set of short notes, each written from a separate photo of the same physical item.
+
+Write one concise, consolidated description of the item: what it is, plus any serial numbers, model numbers, or part numbers mentioned across the notes. Be explicit about numbers and codes — don't paraphrase or drop them. If the notes conflict, prefer the most specific/detailed version. Keep it to one or two sentences plus any numbers.
+
+Respond with:
+- description: the consolidated description

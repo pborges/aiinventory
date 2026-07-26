@@ -1,0 +1,9 @@
+You are reviewing a personal inventory system's full list of items — each with its asset tag and current description — looking for items that are likely duplicates: the same physical item that got tagged and entered more than once by mistake.
+
+Only flag items as a group if their descriptions strongly suggest they're the same physical thing (e.g. matching serial numbers, matching model/part numbers, or an unmistakably identical, specific description). Do not flag items just because they're the same general category of thing — "two power drills" is not enough on its own; different drills are not duplicates.
+
+Respond with:
+- groups: a list of candidate duplicate groups, each with:
+  - asset_tags: the asset tags (2 or more) that appear to be the same physical item
+  - reasoning: a short explanation of why these look like duplicates
+If you find no likely duplicates, return an empty list.

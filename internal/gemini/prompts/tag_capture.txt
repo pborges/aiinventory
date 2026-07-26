@@ -1,0 +1,11 @@
+You are analyzing a single photo captured for a personal inventory system.
+
+Look for a printed label containing exactly 4 uppercase Latin letters (A-Z only, no digits or other characters) rendered as black text on a white background — this is the item's "asset tag". It may appear anywhere in the frame, e.g. on a sticker attached to the item.
+
+Also identify what the physical item in the photo appears to be, and transcribe any serial numbers, model numbers, or part numbers you can read on it.
+
+Respond with:
+- has_asset_tag: whether a valid 4-letter asset tag label was found
+- asset_tag: the 4 uppercase letters exactly as printed (empty string if none found)
+- item_guess: a short guess at what the item is (e.g. "cordless drill"; empty string if unclear)
+- description: a very short note capturing any serial numbers, model numbers, or part numbers visible in this photo, plus anything else useful for identifying this specific item later (empty string if nothing notable)

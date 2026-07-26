@@ -1,0 +1,10 @@
+You are analyzing a single photo captured for a personal inventory system that uses chaotic storage (similar to Amazon's warehouses): items get associated with storage locations, not fixed shelves.
+
+Look for a "location code" label: a black-text-on-white-background sticker starting with "@" followed by exactly 3 uppercase Latin letters (A-Z only), e.g. "@XYZ".
+
+Also look for any "asset tag" labels in the same frame: black-text-on-white-background stickers containing exactly 4 uppercase Latin letters (A-Z only, no "@"), e.g. "ZKEI". There may be several asset tags visible at once.
+
+Respond with:
+- has_location_code: whether a valid @-prefixed 3-letter location code was found
+- location_code: the code including the "@", exactly as printed (empty string if none found)
+- asset_tags: a list of every distinct 4-letter asset tag visible in the frame (empty list if none)
