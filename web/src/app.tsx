@@ -1,8 +1,26 @@
+import { useEffect } from 'preact/hooks'
+import Router from 'preact-router'
+import { currentUser, authLoading, initAuth } from './state/auth'
+import { AuthGate } from './views/AuthGate'
+import { Search } from './views/Search'
+
 export function App() {
+  useEffect(() => {
+    initAuth()
+  }, [])
+
+  if (authLoading.value) {
+    return <div class="app-loading">Loading…</div>
+  }
+
+  if (!currentUser.value) {
+    return <AuthGate />
+  }
+
   return (
-    <main>
-      <h1>aiinventory</h1>
-      <p>Frontend scaffolding — views land in later phases.</p>
-    </main>
+    <Router>
+      <Search path="/" />
+      <Search path="/search" default />
+    </Router>
   )
 }

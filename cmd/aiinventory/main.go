@@ -6,9 +6,10 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/pborges/aiinventory/internal/api"
+	"github.com/pborges/aiinventory/internal/auth"
 	"github.com/pborges/aiinventory/internal/config"
 	"github.com/pborges/aiinventory/internal/store"
-	"github.com/pborges/aiinventory/internal/web"
 )
 
 func main() {
@@ -30,13 +31,12 @@ func main() {
 		}
 		log.Printf("SESSION_SECRET not set; using auto-generated secret persisted in settings")
 	}
-	_ = sessionSecret // wired into auth middleware in Phase 2
+	codec := auth.NewCodec(sessionSecret)
 
-	mux := http.NewServeMux()
-	mux.Handle("/", web.Handler())
+	handler := api.New(db, codec)
 
 	log.Printf("aiinventory listening on :%s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
+	if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {
 		log.Fatal(err)
 	}
 }

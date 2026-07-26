@@ -1,3 +1,4 @@
+-- +goose Up
 CREATE TABLE users (
     id            INTEGER PRIMARY KEY,
     username      TEXT NOT NULL UNIQUE,
@@ -79,13 +80,13 @@ CREATE TABLE duplicate_group_items (
     PRIMARY KEY (group_id, item_id)
 );
 
-CREATE INDEX idx_items_location          ON items(location_id);
-CREATE INDEX idx_items_no_desc           ON items(id) WHERE description IS NULL;
-CREATE INDEX idx_images_item             ON images(item_id, sort_order);
-CREATE INDEX idx_activity_item           ON activity(item_id);
-CREATE INDEX idx_activity_location       ON activity(location_id);
+CREATE INDEX idx_items_location ON items(location_id);
+CREATE INDEX idx_items_no_desc ON items(id) WHERE description IS NULL;
+CREATE INDEX idx_images_item ON images(item_id, sort_order);
+CREATE INDEX idx_activity_item ON activity(item_id);
+CREATE INDEX idx_activity_location ON activity(location_id);
 CREATE INDEX idx_duplicate_groups_pending ON duplicate_groups(status) WHERE status = 'pending';
-CREATE INDEX idx_duplicate_groups_run    ON duplicate_groups(run_id);
+CREATE INDEX idx_duplicate_groups_run ON duplicate_groups(run_id);
 
 -- full-text search: external content tables kept in sync via triggers, see README's
 -- "Full-text search" section for query patterns (bm25 ranking, union of both tables).
@@ -94,29 +95,71 @@ CREATE VIRTUAL TABLE items_fts USING fts5(
     content='items', content_rowid='id'
 );
 
+-- +goose StatementBegin
 CREATE TRIGGER items_ai AFTER INSERT ON items BEGIN
     INSERT INTO items_fts(rowid, asset_tag, description) VALUES (new.id, new.asset_tag, new.description);
 END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
 CREATE TRIGGER items_ad AFTER DELETE ON items BEGIN
     INSERT INTO items_fts(items_fts, rowid, asset_tag, description) VALUES ('delete', old.id, old.asset_tag, old.description);
 END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
 CREATE TRIGGER items_au AFTER UPDATE ON items BEGIN
     INSERT INTO items_fts(items_fts, rowid, asset_tag, description) VALUES ('delete', old.id, old.asset_tag, old.description);
     INSERT INTO items_fts(rowid, asset_tag, description) VALUES (new.id, new.asset_tag, new.description);
 END;
+-- +goose StatementEnd
 
 CREATE VIRTUAL TABLE images_fts USING fts5(
     description,
     content='images', content_rowid='id'
 );
 
+-- +goose StatementBegin
 CREATE TRIGGER images_ai AFTER INSERT ON images BEGIN
     INSERT INTO images_fts(rowid, description) VALUES (new.id, new.description);
 END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
 CREATE TRIGGER images_ad AFTER DELETE ON images BEGIN
     INSERT INTO images_fts(images_fts, rowid, description) VALUES ('delete', old.id, old.description);
 END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
 CREATE TRIGGER images_au AFTER UPDATE ON images BEGIN
     INSERT INTO images_fts(images_fts, rowid, description) VALUES ('delete', old.id, old.description);
     INSERT INTO images_fts(rowid, description) VALUES (new.id, new.description);
 END;
+-- +goose StatementEnd
+
+-- +goose Down
+DROP TRIGGER IF EXISTS images_au;
+DROP TRIGGER IF EXISTS images_ad;
+DROP TRIGGER IF EXISTS images_ai;
+DROP TABLE IF EXISTS images_fts;
+DROP TRIGGER IF EXISTS items_au;
+DROP TRIGGER IF EXISTS items_ad;
+DROP TRIGGER IF EXISTS items_ai;
+DROP TABLE IF EXISTS items_fts;
+DROP INDEX IF EXISTS idx_duplicate_groups_run;
+DROP INDEX IF EXISTS idx_duplicate_groups_pending;
+DROP INDEX IF EXISTS idx_activity_location;
+DROP INDEX IF EXISTS idx_activity_item;
+DROP INDEX IF EXISTS idx_images_item;
+DROP INDEX IF EXISTS idx_items_no_desc;
+DROP INDEX IF EXISTS idx_items_location;
+DROP TABLE IF EXISTS duplicate_group_items;
+DROP TABLE IF EXISTS duplicate_groups;
+DROP TABLE IF EXISTS duplicate_runs;
+DROP TABLE IF EXISTS activity;
+DROP TABLE IF EXISTS settings;
+DROP TABLE IF EXISTS images;
+DROP TABLE IF EXISTS items;
+DROP TABLE IF EXISTS locations;
+DROP TABLE IF EXISTS users;
