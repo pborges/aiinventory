@@ -210,11 +210,17 @@ func (s *Server) handleDeleteImage(w http.ResponseWriter, r *http.Request) {
 	s.handleGetItem(w, r)
 }
 
+type regenerateItemDescriptionRequest struct {
+	Hint string `json:"hint"`
+}
+
 // handleRegenerateItemDescription is the item detail view's single-item
 // "Generate description" action: Gemini reviews every per-image note
 // attached to the item and consolidates them into one description (the
 // same logic as the Search view's bulk action, invoked here for just one
-// item and returning the full refreshed item detail).
+// item and returning the full refreshed item detail). Accepts an optional
+// JSON body with a "hint" field to steer this specific run; an empty/absent
+// body means no hint.
 func (s *Server) handleRegenerateItemDescription(w http.ResponseWriter, r *http.Request) {
 	if s.gemini == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (GEMINI_API_KEY not configured)")
@@ -231,6 +237,14 @@ func (s *Server) handleRegenerateItemDescription(w http.ResponseWriter, r *http.
 		return
 	}
 
+	var req regenerateItemDescriptionRequest
+	if r.ContentLength != 0 {
+		if err := decodeJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+	}
+
 	ctx := r.Context()
 	model, prompt, err := s.resolveGeminiConfig(ctx, gemini.DescriptionRegeneration)
 	if err != nil {
@@ -238,7 +252,7 @@ func (s *Server) handleRegenerateItemDescription(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if _, err := inventory.RegenerateDescription(ctx, s.store, s.gemini, user.ID, model, prompt, id); err != nil {
+	if _, err := inventory.RegenerateDescription(ctx, s.store, s.gemini, user.ID, model, prompt, id, req.Hint); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
 			return

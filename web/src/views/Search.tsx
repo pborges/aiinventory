@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { api, ApiError, type ItemSummary } from '../api/client'
 import { Header } from '../components/Header'
+import { GenerateDescriptionsModal } from '../components/GenerateDescriptionsModal'
 
 interface RouteProps {
   path?: string
@@ -28,6 +29,7 @@ export function Search(_props: RouteProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string | null>(null)
+  const [generateModalItems, setGenerateModalItems] = useState<ItemSummary[] | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function runSearch() {
@@ -80,24 +82,9 @@ export function Search(_props: RouteProps) {
     }
   }
 
-  async function onBulkRegenerate() {
+  function onBulkRegenerate() {
     if (selected.size === 0) return
-    setBulkBusy(true)
-    setBulkMessage(null)
-    try {
-      const { results } = await api.bulkRegenerateDescription([...selected])
-      const failed = results.filter((r) => r.error)
-      setBulkMessage(
-        failed.length === 0
-          ? `Regenerated ${results.length} description(s).`
-          : `Regenerated ${results.length - failed.length} of ${results.length}; ${failed.length} failed.`,
-      )
-      runSearch()
-    } catch (err) {
-      setBulkMessage(err instanceof ApiError ? err.message : 'Bulk regenerate failed')
-    } finally {
-      setBulkBusy(false)
-    }
+    setGenerateModalItems(items.filter((it) => selected.has(it.id)))
   }
 
   const allSelected = items.length > 0 && selected.size === items.length
@@ -184,6 +171,14 @@ export function Search(_props: RouteProps) {
           ))}
         </ul>
       </main>
+
+      {generateModalItems && (
+        <GenerateDescriptionsModal
+          items={generateModalItems}
+          onClose={() => setGenerateModalItems(null)}
+          onComplete={runSearch}
+        />
+      )}
     </div>
   )
 }

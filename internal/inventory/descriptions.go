@@ -16,10 +16,12 @@ type DescriptionStore interface {
 }
 
 // RegenerateDescription implements the Search view's bulk "Regenerate
-// description" action: Gemini reviews every per-image note attached to the
-// item and consolidates them into one description, explicitly preserving
-// serial/part numbers (see the description_regeneration default prompt).
-func RegenerateDescription(ctx context.Context, s DescriptionStore, g gemini.Client, userID int64, model, prompt string, itemID int64) (string, error) {
+// description" action (and the item detail view's single-item version):
+// Gemini reviews every per-image note attached to the item and consolidates
+// them into one description, explicitly preserving serial/part numbers (see
+// the description_regeneration default prompt). hint is an optional
+// user-supplied steer for this specific run; pass "" when there is none.
+func RegenerateDescription(ctx context.Context, s DescriptionStore, g gemini.Client, userID int64, model, prompt string, itemID int64, hint string) (string, error) {
 	item, err := s.GetItemByID(ctx, itemID)
 	if err != nil {
 		return "", fmt.Errorf("look up item: %w", err)
@@ -36,7 +38,7 @@ func RegenerateDescription(ctx context.Context, s DescriptionStore, g gemini.Cli
 		}
 	}
 
-	result, err := g.RegenerateDescription(ctx, model, prompt, item.AssetTag, notes)
+	result, err := g.RegenerateDescription(ctx, model, prompt, item.AssetTag, notes, hint)
 	if err != nil {
 		return "", fmt.Errorf("gemini: %w", err)
 	}

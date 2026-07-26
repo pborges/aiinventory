@@ -13,10 +13,11 @@ import (
 )
 
 type Server struct {
-	store           *store.Store
-	codec           *auth.Codec
-	gemini          gemini.Client // nil if GEMINI_API_KEY wasn't configured — AI-dependent routes handle that
-	duplicateRunner *inventory.Runner
+	store            *store.Store
+	codec            *auth.Codec
+	gemini           gemini.Client // nil if GEMINI_API_KEY wasn't configured — AI-dependent routes handle that
+	duplicateRunner  *inventory.Runner
+	descriptionBatch *inventory.DescriptionBatch
 }
 
 // New assembles the HTTP handler. geminiClient may be nil if no
@@ -24,7 +25,13 @@ type Server struct {
 // description regeneration, duplicate detection) are responsible for
 // returning a clear error when it's nil.
 func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Handler {
-	srv := &Server{store: s, codec: codec, gemini: geminiClient, duplicateRunner: &inventory.Runner{}}
+	srv := &Server{
+		store:            s,
+		codec:            codec,
+		gemini:           geminiClient,
+		duplicateRunner:  &inventory.Runner{},
+		descriptionBatch: &inventory.DescriptionBatch{},
+	}
 
 	mux := http.NewServeMux()
 
@@ -46,6 +53,7 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Han
 	mux.Handle("GET /api/search", srv.requireAuth(srv.handleSearch))
 	mux.Handle("POST /api/items/bulk-delete", srv.requireAuth(srv.handleBulkDelete))
 	mux.Handle("POST /api/items/bulk-regenerate-description", srv.requireAuth(srv.handleBulkRegenerateDescription))
+	mux.Handle("GET /api/items/bulk-regenerate-description/status", srv.requireAuth(srv.handleBulkRegenerateDescriptionStatus))
 
 	mux.Handle("GET /api/images/{id}", srv.requireAuth(srv.handleGetImage))
 

@@ -13,8 +13,8 @@ export function ReconcileDiff({ diff, onApprove, onCancel, applying }: Props) {
   const noChanges = diff.added.length === 0 && diff.moved.length === 0 && diff.removed.length === 0
 
   return (
-    <div class="reconcile-overlay">
-      <div class="reconcile-panel">
+    <div class="modal-overlay">
+      <div class="modal-panel">
         <h2>Reconciling {diff.location_code}</h2>
 
         {noChanges ? (
@@ -39,7 +39,7 @@ export function ReconcileDiff({ diff, onApprove, onCancel, applying }: Props) {
           </ul>
         )}
 
-        <div class="reconcile-actions">
+        <div class="modal-actions">
           <button type="button" onClick={onCancel} disabled={applying}>
             Cancel
           </button>

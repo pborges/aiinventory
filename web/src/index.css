@@ -507,9 +507,10 @@ a.capture-result-tag:hover {
   }
 }
 
-/* --- reconciliation diff approval overlay (README flow #2) --- */
+/* --- generic modal shell, used by the reconciliation approval overlay
+   (README flow #2) and the bulk generate-descriptions progress modal --- */
 
-.reconcile-overlay {
+.modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
@@ -520,7 +521,7 @@ a.capture-result-tag:hover {
   z-index: 10;
 }
 
-.reconcile-panel {
+.modal-panel {
   background: light-dark(#fff, #1c1c1e);
   border-radius: 12px;
   padding: 1.25rem;
@@ -530,8 +531,20 @@ a.capture-result-tag:hover {
   overflow-y: auto;
 }
 
-.reconcile-panel h2 {
+.modal-panel h2 {
   margin-top: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.modal-actions button {
+  padding: 0.4rem 1rem;
+  cursor: pointer;
 }
 
 .reconcile-diff-list {
@@ -556,18 +569,6 @@ a.capture-result-tag:hover {
 
 .diff-removed {
   color: #d33;
-}
-
-.reconcile-actions {
-  margin-top: 1.25rem;
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-.reconcile-actions button {
-  padding: 0.5rem 1rem;
-  cursor: pointer;
 }
 
 /* --- settings (desktop-oriented, see README) --- */
@@ -1110,4 +1111,89 @@ a.capture-result-tag:hover {
 .duplicate-group-actions button {
   padding: 0.4rem 1rem;
   cursor: pointer;
+}
+
+/* --- bulk "generate descriptions" progress modal --- */
+
+.generate-descriptions-modal {
+  max-width: 560px;
+}
+
+.generate-descriptions-progress {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.generate-descriptions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.generate-descriptions-row {
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+
+.generate-descriptions-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.generate-descriptions-tag {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 600;
+}
+
+.generate-descriptions-status {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.generate-descriptions-status-done {
+  color: #2a8f4c;
+}
+
+.generate-descriptions-status-error {
+  color: #d33;
+}
+
+.generate-descriptions-status-generating {
+  color: #b8860b;
+}
+
+.generate-descriptions-description {
+  margin: 0.4rem 0;
+  font-size: 0.9rem;
+}
+
+.generate-descriptions-row-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.generate-descriptions-hint {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.generate-descriptions-row-actions button {
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
 }

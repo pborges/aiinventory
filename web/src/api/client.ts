@@ -108,10 +108,18 @@ export interface SearchFilters {
   locationId?: number
 }
 
-export interface RegenerateDescriptionResult {
+export interface DescriptionBatchItem {
   item_id: number
+  asset_tag: string
+  hint?: string
+  status: 'pending' | 'generating' | 'done' | 'error'
   description?: string
   error?: string
+}
+
+export interface DescriptionBatchStatus {
+  running: boolean
+  items: DescriptionBatchItem[]
 }
 
 export interface ItemImage {
@@ -208,10 +216,10 @@ export const api = {
     return request<{ items: ItemSummary[] }>('GET', '/api/search' + (qs ? `?${qs}` : ''))
   },
   bulkDelete: (itemIds: number[]) => request<{ deleted: number }>('POST', '/api/items/bulk-delete', { item_ids: itemIds }),
-  bulkRegenerateDescription: (itemIds: number[]) =>
-    request<{ results: RegenerateDescriptionResult[] }>('POST', '/api/items/bulk-regenerate-description', {
-      item_ids: itemIds,
-    }),
+  startBulkRegenerateDescription: (items: { item_id: number; hint: string }[]) =>
+    request<void>('POST', '/api/items/bulk-regenerate-description', { items }),
+  bulkRegenerateDescriptionStatus: () =>
+    request<DescriptionBatchStatus>('GET', '/api/items/bulk-regenerate-description/status'),
   getItem: (id: number) => request<ItemDetail>('GET', `/api/items/${id}`),
   updateItemDescription: (id: number, description: string) =>
     request<ItemDetail>('PUT', `/api/items/${id}`, { description }),
@@ -219,8 +227,8 @@ export const api = {
     request<ItemDetail>('PUT', `/api/items/${itemId}/images/order`, { image_ids: imageIds }),
   deleteImage: (itemId: number, imageId: number) =>
     request<ItemDetail>('DELETE', `/api/items/${itemId}/images/${imageId}`),
-  regenerateItemDescription: (itemId: number) =>
-    request<ItemDetail>('POST', `/api/items/${itemId}/regenerate-description`),
+  regenerateItemDescription: (itemId: number, hint?: string) =>
+    request<ItemDetail>('POST', `/api/items/${itemId}/regenerate-description`, hint ? { hint } : undefined),
   listLocations: () => request<{ locations: Location[] }>('GET', '/api/locations'),
   getLocationItems: (id: number) => request<{ items: LocationItem[] }>('GET', `/api/locations/${id}/items`),
   getLocationActivity: (id: number) => request<{ activity: ActivityEntry[] }>('GET', `/api/locations/${id}/activity`),

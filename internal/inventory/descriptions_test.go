@@ -54,7 +54,7 @@ func TestRegenerateDescription(t *testing.T) {
 	}
 	fake := &gemini.Fake{DescriptionResult: gemini.DescriptionResult{Description: "cordless drill, S/N 12345, model XR-500"}}
 
-	desc, err := RegenerateDescription(context.Background(), f, fake, 42, "gemini-2.5-flash", "prompt text", 1)
+	desc, err := RegenerateDescription(context.Background(), f, fake, 42, "gemini-2.5-flash", "prompt text", 1, "")
 	if err != nil {
 		t.Fatalf("RegenerateDescription: %v", err)
 	}
@@ -73,10 +73,28 @@ func TestRegenerateDescriptionGeminiError(t *testing.T) {
 	f := &fakeDescriptionStore{items: map[int64]domain.Item{1: {ID: 1, AssetTag: "ZKEI"}}}
 	fake := &gemini.Fake{DescriptionErr: context.DeadlineExceeded}
 
-	if _, err := RegenerateDescription(context.Background(), f, fake, 42, "model", "prompt", 1); err == nil {
+	if _, err := RegenerateDescription(context.Background(), f, fake, 42, "model", "prompt", 1, ""); err == nil {
 		t.Fatal("expected an error when Gemini fails")
 	}
 	if len(f.updatedIDs) != 0 || len(f.activity) != 0 {
 		t.Fatalf("nothing should be written when Gemini fails: updated=%v activity=%v", f.updatedIDs, f.activity)
+	}
+}
+
+func TestRegenerateDescriptionPassesHintToGemini(t *testing.T) {
+	f := &fakeDescriptionStore{items: map[int64]domain.Item{1: {ID: 1, AssetTag: "ZKEI"}}}
+	var gotHint string
+	fake := &gemini.Fake{
+		DescriptionFunc: func(_ string, _ []string, hint string) (gemini.DescriptionResult, error) {
+			gotHint = hint
+			return gemini.DescriptionResult{Description: "described with hint"}, nil
+		},
+	}
+
+	if _, err := RegenerateDescription(context.Background(), f, fake, 42, "model", "prompt", 1, "blue enclosure"); err != nil {
+		t.Fatalf("RegenerateDescription: %v", err)
+	}
+	if gotHint != "blue enclosure" {
+		t.Errorf("hint passed to gemini = %q, want %q", gotHint, "blue enclosure")
 	}
 }

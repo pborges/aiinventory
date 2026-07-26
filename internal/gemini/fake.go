@@ -17,6 +17,7 @@ type Fake struct {
 
 	DescriptionResult DescriptionResult
 	DescriptionErr    error
+	DescriptionFunc   func(assetTag string, notes []string, hint string) (DescriptionResult, error)
 
 	DuplicateDetectionResult DuplicateDetectionResult
 	DuplicateDetectionErr    error
@@ -38,7 +39,10 @@ func (f *Fake) AnalyzeReconciliation(_ context.Context, _, _ string, image []byt
 	return f.ReconciliationResult, f.ReconciliationErr
 }
 
-func (f *Fake) RegenerateDescription(_ context.Context, _, _ string, _ string, _ []string) (DescriptionResult, error) {
+func (f *Fake) RegenerateDescription(_ context.Context, _, _ string, assetTag string, notes []string, hint string) (DescriptionResult, error) {
+	if f.DescriptionFunc != nil {
+		return f.DescriptionFunc(assetTag, notes, hint)
+	}
 	return f.DescriptionResult, f.DescriptionErr
 }
 

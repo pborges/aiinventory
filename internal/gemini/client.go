@@ -30,7 +30,9 @@ type Client interface {
 
 	// RegenerateDescription consolidates an item's per-image notes into one
 	// description (the Search view's bulk "Regenerate description" action).
-	RegenerateDescription(ctx context.Context, model, prompt string, assetTag string, perImageDescriptions []string) (DescriptionResult, error)
+	// hint is an optional user-supplied steer (e.g. "blue enclosure"); pass
+	// "" when there is none.
+	RegenerateDescription(ctx context.Context, model, prompt string, assetTag string, perImageDescriptions []string, hint string) (DescriptionResult, error)
 
 	// DetectDuplicates scans every item's asset tag + description for
 	// likely duplicates (the Duplicate finder, README flow #5).
@@ -102,7 +104,7 @@ var descriptionSchema = &genai.Schema{
 	Required: []string{"description"},
 }
 
-func (g *GenAIClient) RegenerateDescription(ctx context.Context, model, prompt string, assetTag string, perImageDescriptions []string) (DescriptionResult, error) {
+func (g *GenAIClient) RegenerateDescription(ctx context.Context, model, prompt string, assetTag string, perImageDescriptions []string, hint string) (DescriptionResult, error) {
 	var body strings.Builder
 	fmt.Fprintf(&body, "Asset tag: %s\n\nPer-photo notes:\n", assetTag)
 	for _, d := range perImageDescriptions {
@@ -110,6 +112,9 @@ func (g *GenAIClient) RegenerateDescription(ctx context.Context, model, prompt s
 			continue
 		}
 		fmt.Fprintf(&body, "- %s\n", d)
+	}
+	if strings.TrimSpace(hint) != "" {
+		fmt.Fprintf(&body, "\nUser-supplied hint: %s\n", hint)
 	}
 
 	var out DescriptionResult
