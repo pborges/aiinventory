@@ -102,6 +102,29 @@ export interface RegenerateDescriptionResult {
   error?: string
 }
 
+export interface ItemImage {
+  id: number
+  description: string
+  sort_order: number
+}
+
+export interface ActivityEntry {
+  username: string
+  action: string
+  detail?: string
+  created_at: string
+}
+
+export interface ItemDetail {
+  id: number
+  asset_tag: string
+  description: string
+  location_id?: number
+  location_code?: string
+  images: ItemImage[]
+  activity: ActivityEntry[]
+}
+
 export const api = {
   bootstrapStatus: () => request<{ needed: boolean }>('GET', '/api/auth/bootstrap'),
   bootstrap: (username: string, password: string) =>
@@ -141,4 +164,9 @@ export const api = {
     request<{ results: RegenerateDescriptionResult[] }>('POST', '/api/items/bulk-regenerate-description', {
       item_ids: itemIds,
     }),
+  getItem: (id: number) => request<ItemDetail>('GET', `/api/items/${id}`),
+  updateItemDescription: (id: number, description: string) =>
+    request<ItemDetail>('PUT', `/api/items/${id}`, { description }),
+  reorderImages: (itemId: number, imageIds: number[]) =>
+    request<ItemDetail>('PUT', `/api/items/${itemId}/images/order`, { image_ids: imageIds }),
 }

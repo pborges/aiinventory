@@ -5,6 +5,7 @@ import { AuthGate } from './views/AuthGate'
 import { Capture } from './views/Capture'
 import { Search } from './views/Search'
 import { Settings } from './views/Settings'
+import { ItemDetail } from './views/ItemDetail'
 
 export function App() {
   useEffect(() => {
@@ -25,6 +26,7 @@ export function App() {
       <Capture path="/capture" default />
       <Search path="/search" />
       <Settings path="/settings" />
+      <ItemDetail path="/items/:id" />
     </Router>
   )
 }

@@ -10,7 +10,7 @@ import (
 
 type DescriptionStore interface {
 	GetItemByID(ctx context.Context, id int64) (domain.Item, error)
-	ListImagesByItem(ctx context.Context, itemID int64) ([]domain.Image, error)
+	ListImageMetaByItem(ctx context.Context, itemID int64) ([]domain.Image, error)
 	UpdateItemDescription(ctx context.Context, id int64, description string) error
 	LogActivity(ctx context.Context, userID int64, action domain.ActivityAction, itemID, locationID *int64, detail string) error
 }
@@ -25,7 +25,7 @@ func RegenerateDescription(ctx context.Context, s DescriptionStore, g gemini.Cli
 		return "", fmt.Errorf("look up item: %w", err)
 	}
 
-	images, err := s.ListImagesByItem(ctx, itemID)
+	images, err := s.ListImageMetaByItem(ctx, itemID)
 	if err != nil {
 		return "", fmt.Errorf("list images: %w", err)
 	}

@@ -24,7 +24,7 @@ func (f *fakeDescriptionStore) GetItemByID(_ context.Context, id int64) (domain.
 	return it, nil
 }
 
-func (f *fakeDescriptionStore) ListImagesByItem(_ context.Context, itemID int64) ([]domain.Image, error) {
+func (f *fakeDescriptionStore) ListImageMetaByItem(_ context.Context, itemID int64) ([]domain.Image, error) {
 	return f.images[itemID], nil
 }
 

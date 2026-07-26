@@ -7,10 +7,21 @@ interface RouteProps {
   default?: boolean
 }
 
+function parseLocationFilterFromURL(): { id: number; code: string } | null {
+  const params = new URLSearchParams(window.location.search)
+  const idStr = params.get('location_id')
+  const code = params.get('location_code')
+  if (!idStr) return null
+  const id = parseInt(idStr, 10)
+  if (Number.isNaN(id)) return null
+  return { id, code: code ?? '' }
+}
+
 export function Search(_props: RouteProps) {
   const [query, setQuery] = useState('')
   const [noDescription, setNoDescription] = useState(false)
   const [noLocation, setNoLocation] = useState(false)
+  const [locationFilter, setLocationFilter] = useState(() => parseLocationFilterFromURL())
   const [items, setItems] = useState<ItemSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -23,7 +34,7 @@ export function Search(_props: RouteProps) {
     setLoading(true)
     setError(null)
     api
-      .search({ q: query || undefined, noDescription, noLocation })
+      .search({ q: query || undefined, noDescription, noLocation, locationId: locationFilter?.id })
       .then((res) => {
         setItems(res.items)
         setSelected(new Set())
@@ -39,7 +50,7 @@ export function Search(_props: RouteProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, noDescription, noLocation])
+  }, [query, noDescription, noLocation, locationFilter])
 
   function toggleSelected(id: number) {
     setSelected((prev) => {
@@ -131,6 +142,14 @@ export function Search(_props: RouteProps) {
             />
             No location
           </label>
+          {locationFilter && (
+            <span class="search-location-chip">
+              📍 {locationFilter.code || `location #${locationFilter.id}`}
+              <button type="button" class="link-button" onClick={() => setLocationFilter(null)}>
+                ×
+              </button>
+            </span>
+          )}
         </div>
 
         <div class="search-bulk-bar">
@@ -157,18 +176,20 @@ export function Search(_props: RouteProps) {
               <label class="item-card-select">
                 <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelected(item.id)} />
               </label>
-              <div class="item-card-thumb">
-                {item.primary_image_id ? (
-                  <img src={`/api/images/${item.primary_image_id}`} alt={item.asset_tag} />
-                ) : (
-                  <div class="item-card-thumb-placeholder">{item.asset_tag}</div>
-                )}
-              </div>
-              <div class="item-card-info">
-                <div class="item-card-tag">{item.asset_tag}</div>
-                <div class="item-card-description">{item.description || <em>No description</em>}</div>
-                {item.location_code && <div class="item-card-location">{item.location_code}</div>}
-              </div>
+              <a class="item-card-link" href={`/items/${item.id}`}>
+                <div class="item-card-thumb">
+                  {item.primary_image_id ? (
+                    <img src={`/api/images/${item.primary_image_id}`} alt={item.asset_tag} />
+                  ) : (
+                    <div class="item-card-thumb-placeholder">{item.asset_tag}</div>
+                  )}
+                </div>
+                <div class="item-card-info">
+                  <div class="item-card-tag">{item.asset_tag}</div>
+                  <div class="item-card-description">{item.description || <em>No description</em>}</div>
+                  {item.location_code && <div class="item-card-location">{item.location_code}</div>}
+                </div>
+              </a>
             </li>
           ))}
         </ul>
