@@ -132,12 +132,15 @@ export function Capture(_props: RouteProps) {
 
       <main class="capture-body">
         <div class="camera-square">
-          {cameraError ? (
-            <p class="camera-error">{cameraError}</p>
-          ) : showingFrozenFrame && frozenFrameUrl ? (
+          {/* The video stays mounted at all times — its srcObject is only ever
+              assigned once, on mount, so swapping it out for an <img> and back
+              (as phase changes) would leave a freshly remounted <video> with
+              no stream attached. The frozen-frame photo is instead layered on
+              top of it and hidden/shown, never replacing it in the DOM. */}
+          <video ref={videoRef} autoPlay playsInline muted class="camera-video" />
+          {cameraError && <p class="camera-error">{cameraError}</p>}
+          {!cameraError && showingFrozenFrame && frozenFrameUrl && (
             <img src={frozenFrameUrl} alt="" class="camera-frozen-frame" />
-          ) : (
-            <video ref={videoRef} autoPlay playsInline muted class="camera-video" />
           )}
         </div>
 
