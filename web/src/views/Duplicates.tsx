@@ -115,7 +115,7 @@ export function Duplicates(_props: RouteProps) {
 
       <main class="duplicates-body">
         <div class="duplicates-toolbar">
-          <button type="button" onClick={onRun} disabled={running}>
+          <button type="button" class="btn-primary" onClick={onRun} disabled={running}>
             {running ? 'Running…' : 'Find duplicates'}
           </button>
           {running && <span class="duplicates-running-indicator">Scanning all items…</span>}
@@ -162,7 +162,7 @@ export function Duplicates(_props: RouteProps) {
                 <button type="button" onClick={() => onDismiss(group.id)} disabled={busyGroupId === group.id}>
                   Not a duplicate
                 </button>
-                <button type="button" onClick={() => onMerge(group)} disabled={busyGroupId === group.id}>
+                <button type="button" class="btn-primary" onClick={() => onMerge(group)} disabled={busyGroupId === group.id}>
                   Merge
                 </button>
               </div>

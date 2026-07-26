@@ -94,7 +94,7 @@ export function ReconcileDiff({ diff, onApprove, onCancel, applying }: Props) {
           <button type="button" onClick={onCancel} disabled={applying}>
             Cancel
           </button>
-          <button type="button" onClick={onApproveClick} disabled={applying || noChanges}>
+          <button type="button" class="btn-primary" onClick={onApproveClick} disabled={applying || noChanges}>
             {applying ? 'Applying…' : 'Approve'}
           </button>
         </div>

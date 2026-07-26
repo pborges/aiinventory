@@ -156,7 +156,7 @@ export function GenerateDescriptionsModal({ items, onClose, onComplete }: Props)
               <button type="button" onClick={onClose}>
                 Cancel
               </button>
-              <button type="button" onClick={onGenerateAll}>
+              <button type="button" class="btn-primary" onClick={onGenerateAll}>
                 Generate
               </button>
             </>

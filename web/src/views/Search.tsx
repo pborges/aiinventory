@@ -34,6 +34,7 @@ export function Search(_props: RouteProps) {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string | null>(null)
   const [generateModalItems, setGenerateModalItems] = useState<ItemSummary[] | null>(null)
+  const [hoverPreview, setHoverPreview] = useState<{ src: string; x: number; y: number } | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function runSearch() {
@@ -92,6 +93,21 @@ export function Search(_props: RouteProps) {
   }
 
   const allSelected = items.length > 0 && selected.size === items.length
+
+  // Follows the cursor rather than growing the thumbnail in place — an
+  // in-place hover-zoom (tried first) covers the row's own tag/description
+  // text, since the thumb sits directly beside them in the same flex row.
+  const HOVER_PREVIEW_SIZE = 320
+  const HOVER_PREVIEW_MARGIN = 16
+
+  function showHoverPreview(src: string, e: { clientX: number; clientY: number }) {
+    let x = e.clientX + HOVER_PREVIEW_MARGIN
+    let y = e.clientY + HOVER_PREVIEW_MARGIN
+    if (x + HOVER_PREVIEW_SIZE > window.innerWidth) x = e.clientX - HOVER_PREVIEW_SIZE - HOVER_PREVIEW_MARGIN
+    if (y + HOVER_PREVIEW_SIZE > window.innerHeight) y = window.innerHeight - HOVER_PREVIEW_SIZE - HOVER_PREVIEW_MARGIN
+    if (y < HOVER_PREVIEW_MARGIN) y = HOVER_PREVIEW_MARGIN
+    setHoverPreview({ src, x, y })
+  }
 
   return (
     <div class="search-view">
@@ -168,7 +184,13 @@ export function Search(_props: RouteProps) {
               <a class="item-card-link" href={`/items/${item.id}`}>
                 <div class="item-card-thumb">
                   {item.primary_image_id ? (
-                    <img src={`/api/images/${item.primary_image_id}`} alt={item.asset_tag} />
+                    <img
+                      src={`/api/images/${item.primary_image_id}`}
+                      alt={item.asset_tag}
+                      onMouseEnter={(e) => showHoverPreview(`/api/images/${item.primary_image_id}`, e)}
+                      onMouseMove={(e) => showHoverPreview(`/api/images/${item.primary_image_id}`, e)}
+                      onMouseLeave={() => setHoverPreview(null)}
+                    />
                   ) : (
                     <div class="item-card-thumb-placeholder">{item.asset_tag}</div>
                   )}
@@ -189,6 +211,15 @@ export function Search(_props: RouteProps) {
           items={generateModalItems}
           onClose={() => setGenerateModalItems(null)}
           onComplete={runSearch}
+        />
+      )}
+
+      {hoverPreview && (
+        <img
+          src={hoverPreview.src}
+          alt=""
+          class="search-hover-preview"
+          style={{ left: `${hoverPreview.x}px`, top: `${hoverPreview.y}px` }}
         />
       )}
 

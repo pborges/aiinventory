@@ -226,7 +226,7 @@ export function ItemDetail({ id }: RouteProps) {
                 value={description}
                 onInput={(e) => setDescription((e.target as HTMLTextAreaElement).value)}
               />
-              <button type="button" onClick={onSaveDescription} disabled={saving}>
+              <button type="button" class="btn-primary" onClick={onSaveDescription} disabled={saving}>
                 {saving ? 'Saving…' : 'Save'}
               </button>
             </div>

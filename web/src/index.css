@@ -1,10 +1,34 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  /* Monokai */
+  --bg: #272822;
+  --bg-elevated: #2e2f28;
+  --bg-inset: #1e1f1a;
+  --fg: #f8f8f2;
+  --fg-muted: #a3a08a;
+  --border: #49483e;
+  --border-strong: #75715e;
+
+  --accent-green: #a6e22e; /* success / primary / accept */
+  --accent-pink: #f92672; /* danger / delete / cancel */
+  --accent-blue: #66d9ef; /* info / links / active nav */
+  --accent-orange: #fd971f; /* warning */
+  --accent-purple: #ae81ff; /* secondary accent */
 }
 
 * {
   box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
 }
 
 /* Font Awesome icons (see components/Icon.tsx) — nudged to sit on the
@@ -14,11 +38,84 @@
   flex-shrink: 0;
 }
 
-html,
-body,
-#app {
-  margin: 0;
-  height: 100%;
+/* --- design system: every bare button/input/textarea/select in the app
+   picks this up automatically, so consistency doesn't depend on every
+   view remembering to opt in. Semantic modifiers (.btn-primary,
+   .btn-danger) layer on top for the handful of actions that need
+   emphasis — see AuthGate, Settings, GenerateDescriptionsModal,
+   ReconcileDiff, ItemDetail. --- */
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.45rem 0.9rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 1px;
+}
+
+.btn-primary {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+  border-color: var(--accent-green);
+}
+
+.btn-danger {
+  background: transparent;
+  border-color: var(--accent-pink);
+  color: var(--accent-pink);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--accent-pink);
+  color: var(--bg);
+}
+
+input:not([type='checkbox']):not([type='radio']),
+textarea,
+select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--fg-muted);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent-green);
 }
 
 .app-loading {
@@ -81,7 +178,7 @@ body,
 }
 
 .auth-error {
-  color: #d33;
+  color: var(--accent-pink);
   margin: 0;
   font-size: 0.9rem;
 }
@@ -143,7 +240,8 @@ body,
 }
 
 .app-nav-item-active {
-  background: color-mix(in srgb, currentColor 12%, transparent);
+  background: color-mix(in srgb, var(--accent-blue) 18%, transparent);
+  color: var(--accent-blue);
 }
 
 .app-nav-button {
@@ -260,6 +358,19 @@ body,
   font-weight: 600;
 }
 
+/* Follows the cursor (see Search.tsx's showHoverPreview) rather than
+   growing the thumbnail in place, which would cover the row's own text. */
+.search-hover-preview {
+  position: fixed;
+  z-index: 30;
+  width: 320px;
+  height: 320px;
+  object-fit: cover;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
 .item-card-info {
   min-width: 0;
 }
@@ -368,7 +479,7 @@ body,
 }
 
 .camera-error {
-  color: #fff;
+  color: var(--fg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -433,14 +544,14 @@ body,
   width: 4.5rem;
   height: 4.5rem;
   border-radius: 50%;
-  background: #fff;
+  background: var(--accent-green);
   border: 4px solid rgba(0, 0, 0, 0.3);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.75rem;
-  color: #222;
+  color: var(--bg);
 }
 
 .capture-button:disabled {
@@ -452,21 +563,21 @@ body,
   width: 3.5rem;
   height: 3.5rem;
   font-size: 1.4rem;
-  background: rgba(255, 255, 255, 0.85);
-  color: #d33;
+  background: var(--bg-elevated);
+  color: var(--accent-pink);
 }
 
 .capture-button-accept {
-  background: #2a8f4c;
-  color: #fff;
+  background: var(--accent-green);
+  color: var(--bg);
 }
 
 .capture-spinner {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 50%;
-  border: 3px solid rgba(0, 0, 0, 0.2);
-  border-top-color: #222;
+  border: 3px solid rgba(0, 0, 0, 0.25);
+  border-top-color: var(--bg);
   animation: capture-spin 0.8s linear infinite;
 }
 
@@ -492,15 +603,15 @@ body,
 }
 
 .capture-feedback-success {
-  color: #2a8f4c;
+  color: var(--accent-green);
 }
 
 .capture-feedback-warning {
-  color: #b8860b;
+  color: var(--accent-orange);
 }
 
 .capture-feedback-error {
-  color: #d33;
+  color: var(--accent-pink);
 }
 
 .capture-result-card {
@@ -581,7 +692,7 @@ a.capture-result-tag:hover {
 }
 
 .modal-panel {
-  background: light-dark(#fff, #1c1c1e);
+  background: var(--bg-elevated);
   border-radius: 12px;
   padding: 1.25rem;
   width: 100%;
@@ -668,19 +779,19 @@ a.capture-result-tag:hover {
 }
 
 .diff-new {
-  color: #2b6cb0;
+  color: var(--accent-blue);
 }
 
 .diff-added {
-  color: #2a8f4c;
+  color: var(--accent-green);
 }
 
 .diff-moved {
-  color: #b8860b;
+  color: var(--accent-orange);
 }
 
 .diff-removed {
-  color: #d33;
+  color: var(--accent-pink);
 }
 
 /* --- settings (desktop-oriented, see README) --- */
@@ -735,7 +846,7 @@ a.capture-result-tag:hover {
 }
 
 .settings-status-error {
-  color: #d33;
+  color: var(--accent-pink);
   opacity: 1;
 }
 
@@ -772,12 +883,12 @@ a.capture-result-tag:hover {
 }
 
 .settings-user-status-enabled {
-  color: #2a8f4c;
+  color: var(--accent-green);
   font-size: 0.85rem;
 }
 
 .settings-user-status-disabled {
-  color: #d33;
+  color: var(--accent-pink);
   font-size: 0.85rem;
 }
 
@@ -893,8 +1004,14 @@ a.capture-result-tag:hover {
 .item-delete-button {
   padding: 0.4rem 0.9rem;
   cursor: pointer;
-  color: #d33;
-  border-color: #d33;
+  background: transparent;
+  color: var(--accent-pink);
+  border-color: var(--accent-pink);
+}
+
+.item-delete-button:hover:not(:disabled) {
+  background: var(--accent-pink);
+  color: var(--bg);
 }
 
 .item-delete-button:disabled {
@@ -908,7 +1025,7 @@ a.capture-result-tag:hover {
   gap: 0.6rem;
   flex-wrap: wrap;
   font-size: 0.9rem;
-  color: #d33;
+  color: var(--accent-pink);
 }
 
 .item-delete-confirm button {
@@ -929,8 +1046,8 @@ a.capture-result-tag:hover {
 }
 
 .item-carousel-thumb {
-  width: 9rem;
-  height: 9rem;
+  width: 18rem;
+  height: 18rem;
   object-fit: cover;
   border-radius: 8px;
   display: block;
@@ -944,20 +1061,27 @@ a.capture-result-tag:hover {
 
 .item-carousel-delete {
   position: absolute;
-  top: -0.4rem;
-  right: -0.4rem;
-  width: 1.5rem;
-  height: 1.5rem;
+  top: -0.5rem;
+  right: -0.5rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: 50%;
-  border: none;
-  background: #d33;
-  color: #fff;
-  font-size: 1rem;
+  border: 1.5px solid var(--accent-pink);
+  background: var(--bg);
+  color: var(--accent-pink);
+  font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.item-carousel-delete:hover:not(:disabled) {
+  background: var(--accent-pink);
+  color: var(--bg);
 }
 
 .item-carousel-delete:disabled {
@@ -1004,7 +1128,14 @@ a.capture-result-tag:hover {
 }
 
 .shadowbox-delete {
-  color: #d33;
+  background: transparent;
+  color: var(--accent-pink);
+  border-color: var(--accent-pink);
+}
+
+.shadowbox-delete:hover:not(:disabled) {
+  background: var(--accent-pink);
+  color: var(--bg);
 }
 
 .activity-log {
@@ -1058,7 +1189,8 @@ a.capture-result-tag:hover {
 }
 
 .location-sidebar-item-active {
-  background: color-mix(in srgb, currentColor 12%, transparent);
+  background: color-mix(in srgb, var(--accent-blue) 18%, transparent);
+  color: var(--accent-blue);
   font-weight: 600;
 }
 
@@ -1299,15 +1431,15 @@ a.capture-result-tag:hover {
 }
 
 .generate-descriptions-status-done {
-  color: #2a8f4c;
+  color: var(--accent-green);
 }
 
 .generate-descriptions-status-error {
-  color: #d33;
+  color: var(--accent-pink);
 }
 
 .generate-descriptions-status-generating {
-  color: #b8860b;
+  color: var(--accent-orange);
 }
 
 .generate-descriptions-description {

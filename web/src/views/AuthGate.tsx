@@ -59,7 +59,7 @@ export function AuthGate() {
 
           {error && <p class="auth-error">{error}</p>}
 
-          <button type="submit" disabled={submitting}>
+          <button type="submit" class="btn-primary" disabled={submitting}>
             {isBootstrap ? 'Create account' : 'Sign in'}
           </button>
         </form>

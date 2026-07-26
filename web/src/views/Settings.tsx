@@ -192,7 +192,7 @@ export function Settings(_props: RouteProps) {
               </section>
 
               <div class="settings-actions">
-                <button type="submit" disabled={status === 'saving'}>
+                <button type="submit" class="btn-primary" disabled={status === 'saving'}>
                   Save
                 </button>
                 {status === 'saved' && <span class="settings-status">Saved</span>}
@@ -239,7 +239,7 @@ export function Settings(_props: RouteProps) {
                   minLength={8}
                   required
                 />
-                <button type="submit" disabled={userBusy}>
+                <button type="submit" class="btn-primary" disabled={userBusy}>
                   Add user
                 </button>
               </form>
