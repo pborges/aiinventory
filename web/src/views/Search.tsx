@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { faLocationDot, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { api, ApiError, type ItemSummary } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { GenerateDescriptionsModal } from '../components/GenerateDescriptionsModal'
+import { Icon } from '../components/Icon'
 
 interface RouteProps {
   path?: string
@@ -131,9 +133,9 @@ export function Search(_props: RouteProps) {
           </label>
           {locationFilter && (
             <span class="search-location-chip">
-              📍 {locationFilter.code || `location #${locationFilter.id}`}
-              <button type="button" class="link-button" onClick={() => setLocationFilter(null)}>
-                ×
+              <Icon icon={faLocationDot} /> {locationFilter.code || `location #${locationFilter.id}`}
+              <button type="button" class="link-button" onClick={() => setLocationFilter(null)} aria-label="Clear location filter">
+                <Icon icon={faXmark} />
               </button>
             </span>
           )}

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { faCamera, faMap, faXmark, faCheck } from '@fortawesome/free-solid-svg-icons'
 import { api, ApiError, type ReconcileDiffResponse } from '../api/client'
 import { captureSquareFrame } from '../lib/camera'
 import { ReconcileDiff } from '../components/ReconcileDiff'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
+import { Icon } from '../components/Icon'
 
 interface RouteProps {
   path?: string
@@ -182,7 +184,7 @@ export function Capture(_props: RouteProps) {
             onClick={() => setMode('ingest')}
             disabled={phase !== 'live'}
           >
-            📷 Ingest item
+            <Icon icon={faCamera} /> Ingest item
           </button>
           <button
             type="button"
@@ -190,7 +192,7 @@ export function Capture(_props: RouteProps) {
             onClick={() => setMode('locate')}
             disabled={phase !== 'live'}
           >
-            🗺️ Locate items
+            <Icon icon={faMap} /> Locate items
           </button>
         </div>
 
@@ -234,7 +236,7 @@ export function Capture(_props: RouteProps) {
               onClick={resetToLive}
               aria-label="Cancel — discard this photo"
             >
-              ✕
+              <Icon icon={faXmark} />
             </button>
             <button
               type="button"
@@ -242,7 +244,7 @@ export function Capture(_props: RouteProps) {
               onClick={onAcceptCapture}
               aria-label="Accept — save this item"
             >
-              ✓
+              <Icon icon={faCheck} />
             </button>
           </>
         ) : (
@@ -254,7 +256,7 @@ export function Capture(_props: RouteProps) {
             aria-label={phase === 'result' ? 'Clear and capture another photo' : 'Capture photo'}
           >
             {busy && <span class="capture-spinner" />}
-            {phase === 'result' && <span aria-hidden="true">✕</span>}
+            {phase === 'result' && <Icon icon={faXmark} />}
           </button>
         )}
       </div>

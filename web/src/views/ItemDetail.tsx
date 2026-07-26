@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { route } from 'preact-router'
+import { faLocationDot, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { api, ApiError, type ItemDetail as ItemDetailData } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
+import { Icon } from '../components/Icon'
 
 interface RouteProps {
   path?: string
@@ -153,7 +155,7 @@ export function ItemDetail({ id }: RouteProps) {
                   class="item-detail-location"
                   href={`/search?location_id=${detail.location_id}&location_code=${encodeURIComponent(detail.location_code)}`}
                 >
-                  📍 {detail.location_code}
+                  <Icon icon={faLocationDot} /> {detail.location_code}
                 </a>
               )}
 
@@ -200,7 +202,7 @@ export function ItemDetail({ id }: RouteProps) {
                     }}
                     disabled={deletingImageId === img.id}
                   >
-                    ×
+                    <Icon icon={faXmark} />
                   </button>
                 </div>
               ))}

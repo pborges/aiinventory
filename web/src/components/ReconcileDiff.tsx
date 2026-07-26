@@ -1,5 +1,7 @@
 import { useState } from 'preact/hooks'
+import { faTrashCan } from '@fortawesome/free-solid-svg-icons'
 import type { ReconcileDiffResponse } from '../api/client'
+import { Icon } from './Icon'
 
 interface Props {
   diff: ReconcileDiffResponse
@@ -81,7 +83,7 @@ export function ReconcileDiff({ diff, onApprove, onCancel, applying }: Props) {
                   aria-label={`Cancel this change for ${card.assetTag}`}
                   title="Cancel this change"
                 >
-                  🗑
+                  <Icon icon={faTrashCan} />
                 </button>
               </li>
             ))}

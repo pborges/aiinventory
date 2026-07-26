@@ -7,6 +7,13 @@
   box-sizing: border-box;
 }
 
+/* Font Awesome icons (see components/Icon.tsx) — nudged to sit on the
+   text baseline like the emoji/glyphs they replaced. */
+.icon {
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+}
+
 html,
 body,
 #app {
@@ -229,8 +236,8 @@ body,
 }
 
 .item-card-thumb {
-  width: 3.5rem;
-  height: 3.5rem;
+  width: 6rem;
+  height: 6rem;
   flex-shrink: 0;
   border-radius: 6px;
   overflow: hidden;
@@ -249,7 +256,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
@@ -381,6 +388,10 @@ body,
 
 .capture-mode-btn {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   padding: 0.4rem 0.9rem;
   border: none;
   border-radius: 999px;
@@ -918,8 +929,8 @@ a.capture-result-tag:hover {
 }
 
 .item-carousel-thumb {
-  width: 6rem;
-  height: 6rem;
+  width: 9rem;
+  height: 9rem;
   object-fit: cover;
   border-radius: 8px;
   display: block;
