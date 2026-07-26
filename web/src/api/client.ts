@@ -125,6 +125,18 @@ export interface ItemDetail {
   activity: ActivityEntry[]
 }
 
+export interface Location {
+  id: number
+  code: string
+}
+
+export interface LocationItem {
+  id: number
+  asset_tag: string
+  description: string
+  images: ItemImage[]
+}
+
 export const api = {
   bootstrapStatus: () => request<{ needed: boolean }>('GET', '/api/auth/bootstrap'),
   bootstrap: (username: string, password: string) =>
@@ -169,4 +181,9 @@ export const api = {
     request<ItemDetail>('PUT', `/api/items/${id}`, { description }),
   reorderImages: (itemId: number, imageIds: number[]) =>
     request<ItemDetail>('PUT', `/api/items/${itemId}/images/order`, { image_ids: imageIds }),
+  listLocations: () => request<{ locations: Location[] }>('GET', '/api/locations'),
+  getLocationItems: (id: number) => request<{ items: LocationItem[] }>('GET', `/api/locations/${id}/items`),
+  getLocationActivity: (id: number) => request<{ activity: ActivityEntry[] }>('GET', `/api/locations/${id}/activity`),
+  moveItemToLocation: (locationId: number, itemId: number) =>
+    request<{ item_id: number; location_id: number }>('POST', `/api/locations/${locationId}/move-item`, { item_id: itemId }),
 }

@@ -620,3 +620,118 @@ body,
   opacity: 0.6;
   font-size: 0.8rem;
 }
+
+/* --- location view (desktop, README flow #4) --- */
+
+.location-layout {
+  display: flex;
+  min-height: calc(100dvh - 3.5rem);
+}
+
+.location-sidebar {
+  width: 12rem;
+  flex-shrink: 0;
+  border-right: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  padding: 1rem;
+}
+
+.location-sidebar h2 {
+  font-size: 1rem;
+  margin-top: 0;
+}
+
+.location-sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.location-sidebar-item {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  font-family: ui-monospace, Consolas, monospace;
+  cursor: pointer;
+}
+
+.location-sidebar-item-active {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-weight: 600;
+}
+
+.location-sidebar-item-dragover {
+  outline: 2px dashed currentColor;
+  outline-offset: -2px;
+}
+
+.location-sidebar-empty {
+  opacity: 0.6;
+  font-size: 0.85rem;
+  cursor: default;
+}
+
+.location-main {
+  flex: 1;
+  min-width: 0;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.location-item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+
+.location-item-card {
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 8px;
+  padding: 0.75rem;
+  cursor: grab;
+}
+
+.location-item-tag {
+  display: block;
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.location-item-carousel {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  margin-bottom: 0.5rem;
+}
+
+.location-item-carousel img {
+  width: 4rem;
+  height: 4rem;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.location-item-description {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  margin: 0;
+}
+
+.location-activity-footer {
+  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  background: color-mix(in srgb, currentColor 4%, transparent);
+  padding: 1rem 1.5rem;
+}
+
+.location-activity-footer h3 {
+  margin-top: 0;
+  font-size: 0.95rem;
+}

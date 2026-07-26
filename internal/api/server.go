@@ -50,6 +50,11 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Han
 	mux.Handle("PUT /api/items/{id}", srv.requireAuth(srv.handleUpdateItem))
 	mux.Handle("PUT /api/items/{id}/images/order", srv.requireAuth(srv.handleReorderImages))
 
+	mux.Handle("GET /api/locations", srv.requireAuth(srv.handleListLocations))
+	mux.Handle("GET /api/locations/{id}/items", srv.requireAuth(srv.handleGetLocationItems))
+	mux.Handle("GET /api/locations/{id}/activity", srv.requireAuth(srv.handleGetLocationActivity))
+	mux.Handle("POST /api/locations/{id}/move-item", srv.requireAuth(srv.handleMoveItem))
+
 	mux.Handle("/", web.Handler())
 
 	return mux

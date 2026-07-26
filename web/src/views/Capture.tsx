@@ -100,6 +100,7 @@ export function Capture(_props: RouteProps) {
         <span class="app-header-user">
           {currentUser.value?.username}
           <a href="/search">Search</a>
+          <a href="/locations">Locations</a>
           <a href="/settings">Settings</a>
           <button type="button" class="link-button" onClick={() => logout()}>
             Sign out

@@ -6,6 +6,7 @@ import { Capture } from './views/Capture'
 import { Search } from './views/Search'
 import { Settings } from './views/Settings'
 import { ItemDetail } from './views/ItemDetail'
+import { LocationView } from './views/LocationView'
 
 export function App() {
   useEffect(() => {
@@ -27,6 +28,7 @@ export function App() {
       <Search path="/search" />
       <Settings path="/settings" />
       <ItemDetail path="/items/:id" />
+      <LocationView path="/locations" />
     </Router>
   )
 }
