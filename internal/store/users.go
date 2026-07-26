@@ -14,6 +14,7 @@ import (
 var ErrNotFound = errors.New("not found")
 var ErrUsernameTaken = errors.New("username taken")
 var ErrBootstrapNotAllowed = errors.New("users already exist")
+var ErrAssetTagTaken = errors.New("asset tag taken")
 
 func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	var n int

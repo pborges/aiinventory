@@ -35,6 +35,8 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Han
 	mux.Handle("GET /api/settings", srv.requireAuth(srv.handleGetSettings))
 	mux.Handle("PUT /api/settings", srv.requireAuth(srv.handleUpdateSettings))
 
+	mux.Handle("POST /api/capture", srv.requireAuth(srv.handleCapture))
+
 	mux.Handle("/", web.Handler())
 
 	return mux

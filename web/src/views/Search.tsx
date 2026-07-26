@@ -14,6 +14,7 @@ export function Search(_props: RouteProps) {
         <span class="app-title">aiinventory</span>
         <span class="app-header-user">
           {currentUser.value?.username}
+          <a href="/capture">Capture</a>
           <a href="/settings">Settings</a>
           <button type="button" class="link-button" onClick={() => logout()}>
             Sign out

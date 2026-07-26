@@ -12,6 +12,18 @@ export class ApiError extends Error {
   }
 }
 
+async function throwIfError(res: Response): Promise<void> {
+  if (res.ok) return
+  let message = res.statusText
+  try {
+    const data = await res.json()
+    if (data?.error) message = data.error
+  } catch {
+    // response body wasn't JSON; fall back to statusText
+  }
+  throw new ApiError(res.status, message)
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
     method,
@@ -19,19 +31,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'same-origin',
   })
-
-  if (!res.ok) {
-    let message = res.statusText
-    try {
-      const data = await res.json()
-      if (data?.error) message = data.error
-    } catch {
-      // response body wasn't JSON; fall back to statusText
-    }
-    throw new ApiError(res.status, message)
-  }
-
+  await throwIfError(res)
   if (res.status === 204) return undefined as T
+  return (await res.json()) as T
+}
+
+async function upload<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(path, { method: 'POST', body: form, credentials: 'same-origin' })
+  await throwIfError(res)
   return (await res.json()) as T
 }
 
@@ -51,6 +58,15 @@ export interface SettingsUpdate {
   prompts?: Record<string, string>
 }
 
+export interface CaptureResponse {
+  has_asset_tag: boolean
+  asset_tag?: string
+  item_id?: number
+  item_was_new?: boolean
+  item_guess?: string
+  image_description?: string
+}
+
 export const api = {
   bootstrapStatus: () => request<{ needed: boolean }>('GET', '/api/auth/bootstrap'),
   bootstrap: (username: string, password: string) =>
@@ -61,4 +77,9 @@ export const api = {
   me: () => request<{ user: User }>('GET', '/api/auth/me'),
   getSettings: () => request<Settings>('GET', '/api/settings'),
   updateSettings: (update: SettingsUpdate) => request<Settings>('PUT', '/api/settings', update),
+  capture: (image: Blob) => {
+    const form = new FormData()
+    form.set('image', image, 'capture.jpg')
+    return upload<CaptureResponse>('/api/capture', form)
+  },
 }

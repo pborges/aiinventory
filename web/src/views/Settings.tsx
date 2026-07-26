@@ -59,6 +59,9 @@ export function Settings(_props: RouteProps) {
 
   return (
     <div class="settings-view">
+      <a href="/capture" class="settings-back-link">
+        ← Back
+      </a>
       <h1>Settings</h1>
 
       <form class="settings-form" onSubmit={onSave}>
