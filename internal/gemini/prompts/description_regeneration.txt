@@ -2,5 +2,7 @@ You are consolidating notes for a single item in a personal inventory system. Yo
 
 Write one concise, consolidated description of the item: what it is, plus any serial numbers, model numbers, or part numbers mentioned across the notes. Be explicit about numbers and codes — don't paraphrase or drop them. If the notes conflict, prefer the most specific/detailed version. Keep it to one or two sentences plus any numbers.
 
+Describe the single item itself, not quantity or storage. The source photos may have shown a bin or tray containing several identical or near-identical duplicates of this item — that's just how it's stored, not a property of the item. Never mention count or arrangement (avoid words like "several", "multiple", "loosely packed", "a bin of"), even if a note happens to describe the photo that way.
+
 Respond with:
 - description: the consolidated description

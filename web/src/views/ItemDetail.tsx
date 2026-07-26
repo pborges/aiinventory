@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { route } from 'preact-router'
 import { api, ApiError, type ItemDetail as ItemDetailData } from '../api/client'
 import { Header } from '../components/Header'
 
@@ -26,6 +27,8 @@ export function ItemDetail({ id }: RouteProps) {
   const [regenerating, setRegenerating] = useState(false)
   const [focusedImageId, setFocusedImageId] = useState<number | null>(null)
   const [deletingImageId, setDeletingImageId] = useState<number | null>(null)
+  const [confirmingDeleteItem, setConfirmingDeleteItem] = useState(false)
+  const [deletingItem, setDeletingItem] = useState(false)
   const dragIdRef = useRef<number | null>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
 
@@ -112,6 +115,19 @@ export function ItemDetail({ id }: RouteProps) {
     }
   }
 
+  async function onDeleteItem() {
+    if (!detail) return
+    setDeletingItem(true)
+    setError(null)
+    try {
+      await api.bulkDelete([detail.id])
+      route('/search')
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Delete failed')
+      setDeletingItem(false)
+    }
+  }
+
   function openShadowbox(imageId: number) {
     setFocusedImageId(imageId)
     dialogRef.current?.showModal()
@@ -138,6 +154,24 @@ export function ItemDetail({ id }: RouteProps) {
                 >
                   📍 {detail.location_code}
                 </a>
+              )}
+
+              <div class="item-detail-header-spacer" />
+
+              {!confirmingDeleteItem ? (
+                <button type="button" class="item-delete-button" onClick={() => setConfirmingDeleteItem(true)}>
+                  Delete item
+                </button>
+              ) : (
+                <span class="item-delete-confirm">
+                  Delete this item and all its photos? This can't be undone.
+                  <button type="button" onClick={() => setConfirmingDeleteItem(false)} disabled={deletingItem}>
+                    Cancel
+                  </button>
+                  <button type="button" class="item-delete-button" onClick={onDeleteItem} disabled={deletingItem}>
+                    {deletingItem ? 'Deleting…' : 'Confirm delete'}
+                  </button>
+                </span>
               )}
             </div>
 

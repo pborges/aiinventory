@@ -752,6 +752,36 @@ a.capture-result-tag:hover {
   color: inherit;
 }
 
+.item-detail-header-spacer {
+  flex: 1;
+}
+
+.item-delete-button {
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  color: #d33;
+  border-color: #d33;
+}
+
+.item-delete-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.item-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  color: #d33;
+}
+
+.item-delete-confirm button {
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+
 .item-carousel {
   display: flex;
   gap: 0.5rem;
