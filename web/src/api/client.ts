@@ -137,6 +137,23 @@ export interface LocationItem {
   images: ItemImage[]
 }
 
+export interface DuplicateStatus {
+  running: boolean
+  started_at?: string
+}
+
+export interface DuplicateGroupMember {
+  item_id: number
+  asset_tag: string
+}
+
+export interface DuplicateGroup {
+  id: number
+  items: DuplicateGroupMember[]
+  reasoning: string
+  created_at: string
+}
+
 export const api = {
   bootstrapStatus: () => request<{ needed: boolean }>('GET', '/api/auth/bootstrap'),
   bootstrap: (username: string, password: string) =>
@@ -186,4 +203,13 @@ export const api = {
   getLocationActivity: (id: number) => request<{ activity: ActivityEntry[] }>('GET', `/api/locations/${id}/activity`),
   moveItemToLocation: (locationId: number, itemId: number) =>
     request<{ item_id: number; location_id: number }>('POST', `/api/locations/${locationId}/move-item`, { item_id: itemId }),
+  duplicatesStatus: () => request<DuplicateStatus>('GET', '/api/duplicates/status'),
+  startDuplicateRun: () => request<void>('POST', '/api/duplicates/run'),
+  listDuplicateGroups: () => request<{ groups: DuplicateGroup[] }>('GET', '/api/duplicates/groups'),
+  dismissDuplicateGroup: (id: number) => request<void>('POST', `/api/duplicates/groups/${id}/dismiss`),
+  mergeDuplicateGroup: (id: number, survivorItemId: number, locationId: number | null) =>
+    request<void>('POST', `/api/duplicates/groups/${id}/merge`, {
+      survivor_item_id: survivorItemId,
+      location_id: locationId,
+    }),
 }

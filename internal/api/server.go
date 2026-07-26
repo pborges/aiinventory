@@ -7,22 +7,24 @@ import (
 
 	"github.com/pborges/aiinventory/internal/auth"
 	"github.com/pborges/aiinventory/internal/gemini"
+	"github.com/pborges/aiinventory/internal/inventory"
 	"github.com/pborges/aiinventory/internal/store"
 	"github.com/pborges/aiinventory/internal/web"
 )
 
 type Server struct {
-	store  *store.Store
-	codec  *auth.Codec
-	gemini gemini.Client // nil if GEMINI_API_KEY wasn't configured — AI-dependent routes handle that
+	store           *store.Store
+	codec           *auth.Codec
+	gemini          gemini.Client // nil if GEMINI_API_KEY wasn't configured — AI-dependent routes handle that
+	duplicateRunner *inventory.Runner
 }
 
 // New assembles the HTTP handler. geminiClient may be nil if no
 // GEMINI_API_KEY was configured; routes that need it (capture, reconcile,
-// description regeneration, duplicate detection — added in later phases)
-// are responsible for returning a clear error when it's nil.
+// description regeneration, duplicate detection) are responsible for
+// returning a clear error when it's nil.
 func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Handler {
-	srv := &Server{store: s, codec: codec, gemini: geminiClient}
+	srv := &Server{store: s, codec: codec, gemini: geminiClient, duplicateRunner: &inventory.Runner{}}
 
 	mux := http.NewServeMux()
 
@@ -54,6 +56,12 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Han
 	mux.Handle("GET /api/locations/{id}/items", srv.requireAuth(srv.handleGetLocationItems))
 	mux.Handle("GET /api/locations/{id}/activity", srv.requireAuth(srv.handleGetLocationActivity))
 	mux.Handle("POST /api/locations/{id}/move-item", srv.requireAuth(srv.handleMoveItem))
+
+	mux.Handle("GET /api/duplicates/status", srv.requireAuth(srv.handleDuplicatesStatus))
+	mux.Handle("POST /api/duplicates/run", srv.requireAuth(srv.handleStartDuplicateRun))
+	mux.Handle("GET /api/duplicates/groups", srv.requireAuth(srv.handleListDuplicateGroups))
+	mux.Handle("POST /api/duplicates/groups/{id}/dismiss", srv.requireAuth(srv.handleDismissDuplicateGroup))
+	mux.Handle("POST /api/duplicates/groups/{id}/merge", srv.requireAuth(srv.handleMergeDuplicateGroup))
 
 	mux.Handle("/", web.Handler())
 

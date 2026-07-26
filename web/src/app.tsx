@@ -7,6 +7,7 @@ import { Search } from './views/Search'
 import { Settings } from './views/Settings'
 import { ItemDetail } from './views/ItemDetail'
 import { LocationView } from './views/LocationView'
+import { Duplicates } from './views/Duplicates'
 
 export function App() {
   useEffect(() => {
@@ -29,6 +30,7 @@ export function App() {
       <Settings path="/settings" />
       <ItemDetail path="/items/:id" />
       <LocationView path="/locations" />
+      <Duplicates path="/duplicates" />
     </Router>
   )
 }

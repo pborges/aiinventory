@@ -72,6 +72,7 @@ export function LocationView(_props: RouteProps) {
           {currentUser.value?.username}
           <a href="/capture">Capture</a>
           <a href="/search">Search</a>
+          <a href="/duplicates">Duplicates</a>
           <a href="/settings">Settings</a>
           <button type="button" class="link-button" onClick={() => logout()}>
             Sign out
