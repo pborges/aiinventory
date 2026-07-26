@@ -18,11 +18,7 @@ interface PendingCapture {
   itemWillBeNew: boolean
 }
 
-type ResultData =
-  | { kind: 'item'; assetTag: string; itemId: number; itemWasNew: boolean; guess: string; description: string }
-  | { kind: 'reconciled'; diff: ReconcileDiffResponse }
-  | { kind: 'nothing' }
-  | { kind: 'error'; message: string }
+type ResultData = { kind: 'nothing' } | { kind: 'error'; message: string }
 
 export function Capture(_props: RouteProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -66,16 +62,10 @@ export function Capture(_props: RouteProps) {
     }
   }, [frozenFrameUrl])
 
-  // clearResult=false is used after a *successful* accept/reconcile: the
-  // camera should be immediately ready for the next photo (no extra tap),
-  // while the confirmation card stays visible below until the next capture
-  // overwrites it. Errors and "nothing found" still go through the default
-  // (clearResult=true) path via the explicit ✕ button, since those need a
-  // conscious look-then-dismiss rather than auto-clearing.
-  function resetToLive(clearResult = true) {
+  function resetToLive() {
     setFrozenFrameUrl(null)
     setPendingCapture(null)
-    if (clearResult) setResult(null)
+    setResult(null)
     capturedBlobRef.current = null
     setPhase('live')
   }
@@ -124,16 +114,8 @@ export function Capture(_props: RouteProps) {
     if (!pendingCapture || !capturedBlobRef.current) return
     setPhase('committing')
     try {
-      const applied = await api.captureApply(capturedBlobRef.current, pendingCapture.assetTag, pendingCapture.description)
-      setResult({
-        kind: 'item',
-        assetTag: applied.asset_tag ?? pendingCapture.assetTag,
-        itemId: applied.item_id ?? 0,
-        itemWasNew: !!applied.item_was_new,
-        guess: pendingCapture.guess,
-        description: applied.image_description ?? pendingCapture.description,
-      })
-      resetToLive(false) // saved successfully — go straight back to a live, ready-to-shoot camera
+      await api.captureApply(capturedBlobRef.current, pendingCapture.assetTag, pendingCapture.description)
+      resetToLive() // saved successfully — clear everything and go straight back to a live, ready-to-shoot camera
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Save failed' })
       setPendingCapture(null)
@@ -145,11 +127,10 @@ export function Capture(_props: RouteProps) {
     if (!pendingDiff?.location_code) return
     setApplyingReconcile(true)
     try {
-      const applied = await api.reconcileApply(pendingDiff.location_code, pendingDiff.asset_tags)
-      setResult({ kind: 'reconciled', diff: applied })
+      await api.reconcileApply(pendingDiff.location_code, pendingDiff.asset_tags)
       setPendingDiff(null)
       setApplyingReconcile(false)
-      resetToLive(false) // applied successfully — go straight back to a live, ready-to-shoot camera
+      resetToLive() // applied successfully — clear everything and go straight back to a live, ready-to-shoot camera
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Reconciliation failed' })
       setPendingDiff(null)
@@ -204,45 +185,6 @@ export function Capture(_props: RouteProps) {
             </div>
           )}
 
-          {result?.kind === 'item' && (
-            <div class="capture-result-card">
-              <div class="capture-result-header">
-                <a href={`/items/${result.itemId}`} class="capture-result-tag">
-                  {result.assetTag}
-                </a>
-                <span class="capture-result-action">{result.itemWasNew ? 'Added new item' : 'Added new photo'}</span>
-              </div>
-              {result.guess && <p class="capture-result-guess">{result.guess}</p>}
-              <p class="capture-result-description">{result.description || <em>No notes read from this photo.</em>}</p>
-            </div>
-          )}
-
-          {result?.kind === 'reconciled' && (
-            <div class="capture-result-card">
-              <div class="capture-result-header">
-                <span class="capture-result-tag">{result.diff.location_code}</span>
-                <span class="capture-result-action">Reconciled location</span>
-              </div>
-              <ul class="capture-result-diff-list">
-                {result.diff.added.map((tag) => (
-                  <li class="diff-added" key={`a-${tag}`}>
-                    + {tag} added
-                  </li>
-                ))}
-                {result.diff.moved.map((m) => (
-                  <li class="diff-moved" key={`m-${m.asset_tag}`}>
-                    ~ {m.asset_tag} moved{m.from_location ? ` (was ${m.from_location})` : ''}
-                  </li>
-                ))}
-                {result.diff.removed.map((tag) => (
-                  <li class="diff-removed" key={`r-${tag}`}>
-                    - {tag} removed
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
           {result?.kind === 'nothing' && (
             <p class="capture-feedback capture-feedback-warning">
               No asset tag or location code found — retake with the label clearly visible.
@@ -258,7 +200,7 @@ export function Capture(_props: RouteProps) {
             <button
               type="button"
               class="capture-button capture-button-cancel"
-              onClick={() => resetToLive()}
+              onClick={resetToLive}
               aria-label="Cancel — discard this photo"
             >
               ✕
@@ -276,7 +218,7 @@ export function Capture(_props: RouteProps) {
           <button
             type="button"
             class="capture-button"
-            onClick={phase === 'result' ? () => resetToLive() : onCapture}
+            onClick={phase === 'result' ? resetToLive : onCapture}
             disabled={busy || (phase === 'live' && !!cameraError)}
             aria-label={phase === 'result' ? 'Clear and capture another photo' : 'Capture photo'}
           >
