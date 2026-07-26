@@ -4,6 +4,10 @@ export interface User {
   enabled: boolean
 }
 
+export interface UserListItem extends User {
+  created_at: string
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -212,4 +216,8 @@ export const api = {
       survivor_item_id: survivorItemId,
       location_id: locationId,
     }),
+  listUsers: () => request<{ users: UserListItem[] }>('GET', '/api/users'),
+  createUser: (username: string, password: string) =>
+    request<{ user: User }>('POST', '/api/users', { username, password }),
+  setUserEnabled: (id: number, enabled: boolean) => request<void>('PUT', `/api/users/${id}`, { enabled }),
 }

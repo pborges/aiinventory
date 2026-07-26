@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { api, ApiError, type Settings as SettingsData } from '../api/client'
+import { api, ApiError, type Settings as SettingsData, type UserListItem } from '../api/client'
+import { currentUser } from '../state/auth'
 
 interface RouteProps {
   path?: string
@@ -24,6 +25,12 @@ export function Settings(_props: RouteProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [shadowboxText, setShadowboxText] = useState('')
 
+  const [users, setUsers] = useState<UserListItem[] | null>(null)
+  const [newUsername, setNewUsername] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [userError, setUserError] = useState<string | null>(null)
+  const [userBusy, setUserBusy] = useState(false)
+
   useEffect(() => {
     api.getSettings().then((s) => {
       setData(s)
@@ -32,7 +39,15 @@ export function Settings(_props: RouteProps) {
       for (const { key } of PROMPT_TYPES) o[key] = s.prompts[key]?.override ?? ''
       setOverrides(o)
     })
+    loadUsers()
   }, [])
+
+  function loadUsers() {
+    api
+      .listUsers()
+      .then((res) => setUsers(res.users))
+      .catch((err) => setUserError(err instanceof ApiError ? err.message : 'Failed to load users'))
+  }
 
   function showDefault(key: string) {
     setShadowboxText(data?.prompts[key]?.default ?? '')
@@ -50,6 +65,35 @@ export function Settings(_props: RouteProps) {
     } catch (err) {
       setErrorMsg(err instanceof ApiError ? err.message : 'Something went wrong')
       setStatus('error')
+    }
+  }
+
+  async function onCreateUser(e: Event) {
+    e.preventDefault()
+    setUserBusy(true)
+    setUserError(null)
+    try {
+      await api.createUser(newUsername, newPassword)
+      setNewUsername('')
+      setNewPassword('')
+      loadUsers()
+    } catch (err) {
+      setUserError(err instanceof ApiError ? err.message : 'Failed to create user')
+    } finally {
+      setUserBusy(false)
+    }
+  }
+
+  async function onToggleEnabled(user: UserListItem) {
+    setUserBusy(true)
+    setUserError(null)
+    try {
+      await api.setUserEnabled(user.id, !user.enabled)
+      loadUsers()
+    } catch (err) {
+      setUserError(err instanceof ApiError ? err.message : 'Failed to update user')
+    } finally {
+      setUserBusy(false)
     }
   }
 
@@ -108,6 +152,52 @@ export function Settings(_props: RouteProps) {
           {errorMsg && <span class="settings-status settings-status-error">{errorMsg}</span>}
         </div>
       </form>
+
+      <section class="settings-users">
+        <h2>Users</h2>
+        <p class="settings-users-note">
+          No admin/non-admin distinction yet — any logged-in, enabled user can manage every account.
+        </p>
+
+        <ul class="settings-user-list">
+          {users === null && <li>Loading…</li>}
+          {users?.map((u) => (
+            <li class="settings-user-row" key={u.id}>
+              <span class="settings-user-name">
+                {u.username}
+                {u.id === currentUser.value?.id && ' (you)'}
+              </span>
+              <span class={u.enabled ? 'settings-user-status-enabled' : 'settings-user-status-disabled'}>
+                {u.enabled ? 'Enabled' : 'Disabled'}
+              </span>
+              <button type="button" onClick={() => onToggleEnabled(u)} disabled={userBusy}>
+                {u.enabled ? 'Disable' : 'Enable'}
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        <form class="settings-new-user-form" onSubmit={onCreateUser}>
+          <input
+            placeholder="Username"
+            value={newUsername}
+            onInput={(e) => setNewUsername((e.target as HTMLInputElement).value)}
+            required
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={newPassword}
+            onInput={(e) => setNewPassword((e.target as HTMLInputElement).value)}
+            minLength={8}
+            required
+          />
+          <button type="submit" disabled={userBusy}>
+            Add user
+          </button>
+        </form>
+        {userError && <p class="settings-status settings-status-error">{userError}</p>}
+      </section>
 
       <dialog ref={dialogRef} class="prompt-shadowbox">
         <pre>{shadowboxText}</pre>

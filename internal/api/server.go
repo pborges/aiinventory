@@ -63,6 +63,10 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Han
 	mux.Handle("POST /api/duplicates/groups/{id}/dismiss", srv.requireAuth(srv.handleDismissDuplicateGroup))
 	mux.Handle("POST /api/duplicates/groups/{id}/merge", srv.requireAuth(srv.handleMergeDuplicateGroup))
 
+	mux.Handle("GET /api/users", srv.requireAuth(srv.handleListUsers))
+	mux.Handle("POST /api/users", srv.requireAuth(srv.handleCreateUser))
+	mux.Handle("PUT /api/users/{id}", srv.requireAuth(srv.handleSetUserEnabled))
+
 	mux.Handle("/", web.Handler())
 
 	return mux
