@@ -1,0 +1,12 @@
+services:
+  aiinventory:
+    image: ghcr.io/pborges/aiinventory:latest
+    container_name: aiinventory
+    restart: unless-stopped
+    ports:
+      - "8093:8080"
+    volumes:
+      - /mnt/fast/apps/aiinventory:/data
+    environment:
+      DB_PATH: /data/aiinventory.db
+      TLS_ENABLED: "false"
