@@ -24,6 +24,11 @@ func newTestServerWithGemini(t *testing.T, g gemini.Client) (http.Handler, []*ht
 
 func doCaptureUpload(t *testing.T, h http.Handler, cookies []*http.Cookie, imageBytes []byte) *httptest.ResponseRecorder {
 	t.Helper()
+	return doMultipartUpload(t, h, "/api/capture", cookies, imageBytes)
+}
+
+func doMultipartUpload(t *testing.T, h http.Handler, path string, cookies []*http.Cookie, imageBytes []byte) *httptest.ResponseRecorder {
+	t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	part, err := mw.CreateFormFile("image", "capture.jpg")
@@ -35,7 +40,7 @@ func doCaptureUpload(t *testing.T, h http.Handler, cookies []*http.Cookie, image
 		t.Fatalf("close multipart writer: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/capture", &buf)
+	req := httptest.NewRequest(http.MethodPost, path, &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	for _, c := range cookies {
 		req.AddCookie(c)

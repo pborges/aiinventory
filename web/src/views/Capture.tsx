@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { api, ApiError, type CaptureResponse } from '../api/client'
+import { api, ApiError, type CaptureResponse, type ReconcileDiffResponse } from '../api/client'
 import { captureSquareFrame } from '../lib/camera'
 import { currentUser, logout } from '../state/auth'
+import { ReconcileDiff } from '../components/ReconcileDiff'
 
 interface RouteProps {
   path?: string
@@ -11,7 +12,8 @@ interface RouteProps {
 type Feedback =
   | { kind: 'none' }
   | { kind: 'success'; response: CaptureResponse }
-  | { kind: 'no-tag' }
+  | { kind: 'reconciled'; diff: ReconcileDiffResponse }
+  | { kind: 'nothing-found' }
   | { kind: 'error'; message: string }
 
 export function Capture(_props: RouteProps) {
@@ -19,6 +21,8 @@ export function Capture(_props: RouteProps) {
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [capturing, setCapturing] = useState(false)
   const [feedback, setFeedback] = useState<Feedback>({ kind: 'none' })
+  const [pendingDiff, setPendingDiff] = useState<ReconcileDiffResponse | null>(null)
+  const [applying, setApplying] = useState(false)
 
   useEffect(() => {
     let stream: MediaStream | null = null
@@ -50,12 +54,42 @@ export function Capture(_props: RouteProps) {
     setFeedback({ kind: 'none' })
     try {
       const blob = await captureSquareFrame(videoRef.current)
-      const response = await api.capture(blob)
-      setFeedback(response.has_asset_tag ? { kind: 'success', response } : { kind: 'no-tag' })
+
+      // The app doesn't ask which kind of label is in frame — it tries the
+      // asset-tag flow first (the common case), and only falls back to the
+      // location-reconciliation flow if no asset tag was found.
+      const captureResult = await api.capture(blob)
+      if (captureResult.has_asset_tag) {
+        setFeedback({ kind: 'success', response: captureResult })
+        return
+      }
+
+      const diff = await api.reconcilePreview(blob)
+      if (diff.has_location_code) {
+        setPendingDiff(diff)
+        return
+      }
+
+      setFeedback({ kind: 'nothing-found' })
     } catch (err) {
       setFeedback({ kind: 'error', message: err instanceof ApiError ? err.message : 'Capture failed' })
     } finally {
       setCapturing(false)
+    }
+  }
+
+  async function onApproveReconcile() {
+    if (!pendingDiff?.location_code) return
+    setApplying(true)
+    try {
+      const applied = await api.reconcileApply(pendingDiff.location_code, pendingDiff.asset_tags)
+      setFeedback({ kind: 'reconciled', diff: applied })
+      setPendingDiff(null)
+    } catch (err) {
+      setFeedback({ kind: 'error', message: err instanceof ApiError ? err.message : 'Reconciliation failed' })
+      setPendingDiff(null)
+    } finally {
+      setApplying(false)
     }
   }
 
@@ -97,13 +131,28 @@ export function Capture(_props: RouteProps) {
             {feedback.response.item_guess ? ` — ${feedback.response.item_guess}` : ''}
           </p>
         )}
-        {feedback.kind === 'no-tag' && (
+        {feedback.kind === 'reconciled' && (
+          <p class="capture-feedback capture-feedback-success">
+            Reconciled <strong>{feedback.diff.location_code}</strong>: +{feedback.diff.added.length} ~
+            {feedback.diff.moved.length} -{feedback.diff.removed.length}
+          </p>
+        )}
+        {feedback.kind === 'nothing-found' && (
           <p class="capture-feedback capture-feedback-warning">
-            No asset tag found — retake with the tag clearly visible.
+            No asset tag or location code found — retake with the label clearly visible.
           </p>
         )}
         {feedback.kind === 'error' && <p class="capture-feedback capture-feedback-error">{feedback.message}</p>}
       </main>
+
+      {pendingDiff && (
+        <ReconcileDiff
+          diff={pendingDiff}
+          applying={applying}
+          onApprove={onApproveReconcile}
+          onCancel={() => setPendingDiff(null)}
+        />
+      )}
     </div>
   )
 }

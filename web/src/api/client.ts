@@ -67,6 +67,20 @@ export interface CaptureResponse {
   image_description?: string
 }
 
+export interface MovedItem {
+  asset_tag: string
+  from_location?: string
+}
+
+export interface ReconcileDiffResponse {
+  has_location_code: boolean
+  location_code?: string
+  asset_tags: string[]
+  added: string[]
+  moved: MovedItem[]
+  removed: string[]
+}
+
 export const api = {
   bootstrapStatus: () => request<{ needed: boolean }>('GET', '/api/auth/bootstrap'),
   bootstrap: (username: string, password: string) =>
@@ -82,4 +96,14 @@ export const api = {
     form.set('image', image, 'capture.jpg')
     return upload<CaptureResponse>('/api/capture', form)
   },
+  reconcilePreview: (image: Blob) => {
+    const form = new FormData()
+    form.set('image', image, 'capture.jpg')
+    return upload<ReconcileDiffResponse>('/api/reconcile/preview', form)
+  },
+  reconcileApply: (locationCode: string, assetTags: string[]) =>
+    request<ReconcileDiffResponse>('POST', '/api/reconcile/apply', {
+      location_code: locationCode,
+      asset_tags: assetTags,
+    }),
 }

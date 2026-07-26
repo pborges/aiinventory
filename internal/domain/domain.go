@@ -38,6 +38,22 @@ type Image struct {
 	CreatedBy   int64
 }
 
+// ReconcileDiff is the git-diff-style summary of a location reconciliation
+// (README flow #2) — computed read-only by internal/inventory, then applied
+// atomically by internal/store. Lives in domain (not inventory) so store can
+// consume it without depending on inventory.
+type ReconcileDiff struct {
+	LocationCode string
+	Added        []string    // asset tags newly linked to this location
+	Moved        []MovedItem // asset tags moved here from a different location
+	Removed      []string    // asset tags no longer in the frame, unlinked from this location
+}
+
+type MovedItem struct {
+	AssetTag     string
+	FromLocation string // "" if the previous location couldn't be resolved
+}
+
 // Activity actions. Kept as typed constants so callers can't typo a raw string.
 type ActivityAction string
 

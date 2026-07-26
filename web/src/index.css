@@ -222,6 +222,69 @@ body,
   }
 }
 
+/* --- reconciliation diff approval overlay (README flow #2) --- */
+
+.reconcile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 10;
+}
+
+.reconcile-panel {
+  background: light-dark(#fff, #1c1c1e);
+  border-radius: 12px;
+  padding: 1.25rem;
+  width: 100%;
+  max-width: 420px;
+  max-height: 80dvh;
+  overflow-y: auto;
+}
+
+.reconcile-panel h2 {
+  margin-top: 0;
+}
+
+.reconcile-diff-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.95rem;
+}
+
+.reconcile-diff-list li {
+  padding: 0.15rem 0;
+}
+
+.diff-added {
+  color: #2a8f4c;
+}
+
+.diff-moved {
+  color: #b8860b;
+}
+
+.diff-removed {
+  color: #d33;
+}
+
+.reconcile-actions {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.reconcile-actions button {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
 /* --- settings (desktop-oriented, see README) --- */
 
 .settings-back-link {
