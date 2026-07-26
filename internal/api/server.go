@@ -40,6 +40,12 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Han
 	mux.Handle("POST /api/reconcile/preview", srv.requireAuth(srv.handleReconcilePreview))
 	mux.Handle("POST /api/reconcile/apply", srv.requireAuth(srv.handleReconcileApply))
 
+	mux.Handle("GET /api/search", srv.requireAuth(srv.handleSearch))
+	mux.Handle("POST /api/items/bulk-delete", srv.requireAuth(srv.handleBulkDelete))
+	mux.Handle("POST /api/items/bulk-regenerate-description", srv.requireAuth(srv.handleBulkRegenerateDescription))
+
+	mux.Handle("GET /api/images/{id}", srv.requireAuth(srv.handleGetImage))
+
 	mux.Handle("/", web.Handler())
 
 	return mux
