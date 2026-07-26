@@ -27,6 +27,13 @@ type Item struct {
 	UpdatedAt   time.Time
 }
 
+type Tag struct {
+	ID        int64
+	Name      string
+	Color     string
+	CreatedAt time.Time
+}
+
 type Image struct {
 	ID          int64
 	ItemID      int64
@@ -70,6 +77,7 @@ const (
 	ActivityDescriptionEdited       ActivityAction = "description_edited"
 	ActivityDuplicateGroupDismissed ActivityAction = "duplicate_group_dismissed"
 	ActivityItemsMerged             ActivityAction = "items_merged"
+	ActivityItemTagsUpdated         ActivityAction = "item_tags_updated"
 )
 
 type Activity struct {

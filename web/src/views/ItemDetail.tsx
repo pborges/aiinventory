@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { route } from 'preact-router'
 import { faLocationDot, faXmark } from '@fortawesome/free-solid-svg-icons'
-import { api, ApiError, type ItemDetail as ItemDetailData } from '../api/client'
+import { api, ApiError, type ItemDetail as ItemDetailData, type Tag } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { Icon } from '../components/Icon'
+import { TagChip } from '../components/TagChip'
 
 interface RouteProps {
   path?: string
@@ -32,12 +33,15 @@ export function ItemDetail({ id }: RouteProps) {
   const [deletingImageId, setDeletingImageId] = useState<number | null>(null)
   const [confirmingDeleteItem, setConfirmingDeleteItem] = useState(false)
   const [deletingItem, setDeletingItem] = useState(false)
+  const [allTags, setAllTags] = useState<Tag[]>([])
+  const [tagsBusy, setTagsBusy] = useState(false)
   const dragIdRef = useRef<number | null>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
     if (!itemId || Number.isNaN(itemId)) return
     load()
+    api.listTags().then((res) => setAllTags(res.tags))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemId])
 
@@ -52,6 +56,27 @@ export function ItemDetail({ id }: RouteProps) {
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load item'))
       .finally(() => setLoading(false))
+  }
+
+  async function onToggleTag(tag: Tag) {
+    if (!detail) return
+    const current = new Set(detail.tags.map((t) => t.id))
+    if (current.has(tag.id)) current.delete(tag.id)
+    else current.add(tag.id)
+    const nextIds = [...current]
+
+    // optimistic toggle, then persist
+    setDetail({ ...detail, tags: allTags.filter((t) => current.has(t.id)) })
+    setTagsBusy(true)
+    try {
+      const updated = await api.setItemTags(detail.id, nextIds)
+      setDetail(updated)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update tags')
+      load()
+    } finally {
+      setTagsBusy(false)
+    }
   }
 
   async function onSaveDescription() {
@@ -176,6 +201,18 @@ export function ItemDetail({ id }: RouteProps) {
                   </button>
                 </span>
               )}
+            </div>
+
+            <div class="tag-cloud item-detail-tags">
+              {allTags.length === 0 && <p class="item-detail-tags-empty">No tags yet — create some in Settings.</p>}
+              {allTags.map((tag) => (
+                <TagChip
+                  key={tag.id}
+                  tag={tag}
+                  selected={detail.tags.some((t) => t.id === tag.id)}
+                  onClick={() => !tagsBusy && onToggleTag(tag)}
+                />
+              ))}
             </div>
 
             <div class="item-carousel">

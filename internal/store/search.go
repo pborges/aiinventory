@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+
+	"github.com/pborges/aiinventory/internal/domain"
 )
 
 type SearchParams struct {
@@ -13,17 +15,19 @@ type SearchParams struct {
 	NoLocation    bool
 	NoPhoto       bool
 	LocationID    *int64
+	TagIDs        []int64 // non-empty: item must have at least one of these tags (OR)
 }
 
 // ItemSummary is one search result: enough to render a card (asset tag,
-// description, location code, primary image) without shipping full image
-// bytes — the frontend fetches those separately via GET /api/images/{id}.
+// description, location code, primary image, tags) without shipping full
+// image bytes — the frontend fetches those separately via GET /api/images/{id}.
 type ItemSummary struct {
 	ID             int64
 	AssetTag       string
 	Description    string
 	LocationCode   string // "" if unlinked
 	PrimaryImageID *int64
+	Tags           []domain.Tag
 }
 
 const itemSummaryColumns = `items.id, items.asset_tag, items.description, locations.code,
@@ -50,7 +54,11 @@ func (s *Store) SearchItems(ctx context.Context, params SearchParams) ([]ItemSum
 			return nil, fmt.Errorf("search items: %w", err)
 		}
 		defer rows.Close()
-		return scanItemSummaries(rows)
+		results, err := scanItemSummaries(rows)
+		if err != nil {
+			return nil, err
+		}
+		return attachTags(ctx, s, results)
 	}
 
 	// item-level hits, ranked by relevance
@@ -98,6 +106,26 @@ func (s *Store) SearchItems(ctx context.Context, params SearchParams) ([]ItemSum
 			seen[it.ID] = true
 		}
 	}
+	return attachTags(ctx, s, results)
+}
+
+// attachTags batch-loads tags for every result in one query and attaches
+// them, rather than querying per-item.
+func attachTags(ctx context.Context, s *Store, results []ItemSummary) ([]ItemSummary, error) {
+	if len(results) == 0 {
+		return results, nil
+	}
+	ids := make([]int64, len(results))
+	for i, r := range results {
+		ids[i] = r.ID
+	}
+	tagsByItem, err := s.ListTagsForItems(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range results {
+		results[i].Tags = tagsByItem[results[i].ID]
+	}
 	return results, nil
 }
 
@@ -115,6 +143,14 @@ func buildFilterClause(params SearchParams, args *[]any) string {
 	if params.LocationID != nil {
 		conds = append(conds, "items.location_id = ?")
 		*args = append(*args, *params.LocationID)
+	}
+	if len(params.TagIDs) > 0 {
+		placeholders := make([]string, len(params.TagIDs))
+		for i, tagID := range params.TagIDs {
+			placeholders[i] = "?"
+			*args = append(*args, tagID)
+		}
+		conds = append(conds, "EXISTS (SELECT 1 FROM item_tags WHERE item_tags.item_id = items.id AND item_tags.tag_id IN ("+strings.Join(placeholders, ",")+"))")
 	}
 	if len(conds) == 0 {
 		return ""

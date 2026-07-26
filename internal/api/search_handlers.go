@@ -10,11 +10,12 @@ import (
 )
 
 type itemSummaryResponse struct {
-	ID             int64  `json:"id"`
-	AssetTag       string `json:"asset_tag"`
-	Description    string `json:"description"`
-	LocationCode   string `json:"location_code,omitempty"`
-	PrimaryImageID *int64 `json:"primary_image_id,omitempty"`
+	ID             int64         `json:"id"`
+	AssetTag       string        `json:"asset_tag"`
+	Description    string        `json:"description"`
+	LocationCode   string        `json:"location_code,omitempty"`
+	PrimaryImageID *int64        `json:"primary_image_id,omitempty"`
+	Tags           []tagResponse `json:"tags"`
 }
 
 // handleSearch implements the Search view (README flow #3): a free-text
@@ -35,6 +36,14 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		params.LocationID = &id
 	}
+	for _, v := range q["tag_id"] {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid tag_id")
+			return
+		}
+		params.TagIDs = append(params.TagIDs, id)
+	}
 
 	results, err := s.store.SearchItems(r.Context(), params)
 	if err != nil {
@@ -50,6 +59,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			Description:    it.Description,
 			LocationCode:   it.LocationCode,
 			PrimaryImageID: it.PrimaryImageID,
+			Tags:           toTagResponses(it.Tags),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})

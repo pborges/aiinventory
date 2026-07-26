@@ -63,6 +63,7 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Han
 	mux.Handle("POST /api/items/{id}/regenerate-description", srv.requireAuth(srv.handleRegenerateItemDescription))
 	mux.Handle("PUT /api/items/{id}/images/order", srv.requireAuth(srv.handleReorderImages))
 	mux.Handle("DELETE /api/items/{id}/images/{imageId}", srv.requireAuth(srv.handleDeleteImage))
+	mux.Handle("PUT /api/items/{id}/tags", srv.requireAuth(srv.handleSetItemTags))
 
 	mux.Handle("GET /api/locations", srv.requireAuth(srv.handleListLocations))
 	mux.Handle("GET /api/locations/{id}/items", srv.requireAuth(srv.handleGetLocationItems))
@@ -78,6 +79,11 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Han
 	mux.Handle("GET /api/users", srv.requireAuth(srv.handleListUsers))
 	mux.Handle("POST /api/users", srv.requireAuth(srv.handleCreateUser))
 	mux.Handle("PUT /api/users/{id}", srv.requireAuth(srv.handleSetUserEnabled))
+
+	mux.Handle("GET /api/tags", srv.requireAuth(srv.handleListTags))
+	mux.Handle("POST /api/tags", srv.requireAuth(srv.handleCreateTag))
+	mux.Handle("PUT /api/tags/{id}", srv.requireAuth(srv.handleUpdateTag))
+	mux.Handle("DELETE /api/tags/{id}", srv.requireAuth(srv.handleDeleteTag))
 
 	mux.Handle("/", web.Handler())
 

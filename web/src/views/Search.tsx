@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { faLocationDot, faXmark } from '@fortawesome/free-solid-svg-icons'
-import { api, ApiError, type ItemSummary } from '../api/client'
+import { api, ApiError, type ItemSummary, type Tag } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { GenerateDescriptionsModal } from '../components/GenerateDescriptionsModal'
 import { Icon } from '../components/Icon'
+import { TagChip } from '../components/TagChip'
 
 interface RouteProps {
   path?: string
@@ -27,6 +28,8 @@ export function Search(_props: RouteProps) {
   const [noLocation, setNoLocation] = useState(false)
   const [noPhoto, setNoPhoto] = useState(false)
   const [locationFilter, setLocationFilter] = useState(() => parseLocationFilterFromURL())
+  const [allTags, setAllTags] = useState<Tag[]>([])
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set())
   const [items, setItems] = useState<ItemSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +44,14 @@ export function Search(_props: RouteProps) {
     setLoading(true)
     setError(null)
     api
-      .search({ q: query || undefined, noDescription, noLocation, noPhoto, locationId: locationFilter?.id })
+      .search({
+        q: query || undefined,
+        noDescription,
+        noLocation,
+        noPhoto,
+        locationId: locationFilter?.id,
+        tagIds: selectedTagIds.size > 0 ? [...selectedTagIds] : undefined,
+      })
       .then((res) => {
         setItems(res.items)
         setSelected(new Set())
@@ -51,13 +61,26 @@ export function Search(_props: RouteProps) {
   }
 
   useEffect(() => {
+    api.listTags().then((res) => setAllTags(res.tags))
+  }, [])
+
+  useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(runSearch, 250)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, noDescription, noLocation, noPhoto, locationFilter])
+  }, [query, noDescription, noLocation, noPhoto, locationFilter, selectedTagIds])
+
+  function toggleTagFilter(tagId: number) {
+    setSelectedTagIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(tagId)) next.delete(tagId)
+      else next.add(tagId)
+      return next
+    })
+  }
 
   function toggleSelected(id: number) {
     setSelected((prev) => {
@@ -157,6 +180,14 @@ export function Search(_props: RouteProps) {
           )}
         </div>
 
+        {allTags.length > 0 && (
+          <div class="tag-cloud search-tag-filter">
+            {allTags.map((tag) => (
+              <TagChip key={tag.id} tag={tag} selected={selectedTagIds.has(tag.id)} onClick={() => toggleTagFilter(tag.id)} />
+            ))}
+          </div>
+        )}
+
         <div class="search-bulk-bar">
           <label class="search-filter">
             <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} disabled={items.length === 0} />
@@ -201,6 +232,13 @@ export function Search(_props: RouteProps) {
                   {item.location_code && <div class="item-card-location">{item.location_code}</div>}
                 </div>
               </a>
+              {item.tags.length > 0 && (
+                <div class="item-card-tags">
+                  {item.tags.map((tag) => (
+                    <TagChip key={tag.id} tag={tag} />
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>

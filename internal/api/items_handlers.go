@@ -34,6 +34,7 @@ type itemDetailResponse struct {
 	LocationCode string              `json:"location_code,omitempty"`
 	Images       []itemImageResponse `json:"images"`
 	Activity     []activityResponse  `json:"activity"`
+	Tags         []tagResponse       `json:"tags"`
 }
 
 func toActivityResponse(a domain.Activity) activityResponse {
@@ -93,6 +94,12 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		activityResponses = append(activityResponses, toActivityResponse(a))
 	}
 
+	tags, err := s.store.ListTagsByItem(ctx, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, itemDetailResponse{
 		ID:           item.ID,
 		AssetTag:     item.AssetTag,
@@ -101,6 +108,7 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		LocationCode: locationCode,
 		Images:       imageResponses,
 		Activity:     activityResponses,
+		Tags:         toTagResponses(tags),
 	})
 }
 

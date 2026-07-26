@@ -106,12 +106,19 @@ export interface ReconcileDiffResponse {
   removed: string[]
 }
 
+export interface Tag {
+  id: number
+  name: string
+  color: string
+}
+
 export interface ItemSummary {
   id: number
   asset_tag: string
   description: string
   location_code?: string
   primary_image_id?: number
+  tags: Tag[]
 }
 
 export interface SearchFilters {
@@ -120,6 +127,7 @@ export interface SearchFilters {
   noLocation?: boolean
   noPhoto?: boolean
   locationId?: number
+  tagIds?: number[]
 }
 
 export interface ItemImage {
@@ -143,6 +151,7 @@ export interface ItemDetail {
   location_code?: string
   images: ItemImage[]
   activity: ActivityEntry[]
+  tags: Tag[]
 }
 
 export interface Location {
@@ -214,6 +223,7 @@ export const api = {
     if (filters.noLocation) params.set('no_location', '1')
     if (filters.noPhoto) params.set('no_photo', '1')
     if (filters.locationId != null) params.set('location_id', String(filters.locationId))
+    for (const tagId of filters.tagIds ?? []) params.append('tag_id', String(tagId))
     const qs = params.toString()
     return request<{ items: ItemSummary[] }>('GET', '/api/search' + (qs ? `?${qs}` : ''))
   },
@@ -245,4 +255,11 @@ export const api = {
   createUser: (username: string, password: string) =>
     request<{ user: User }>('POST', '/api/users', { username, password }),
   setUserEnabled: (id: number, enabled: boolean) => request<void>('PUT', `/api/users/${id}`, { enabled }),
+  listTags: () => request<{ tags: Tag[] }>('GET', '/api/tags'),
+  createTag: (name: string, color: string) => request<{ tag: Tag }>('POST', '/api/tags', { name, color }),
+  updateTag: (id: number, name: string, color: string) =>
+    request<{ tag: Tag }>('PUT', `/api/tags/${id}`, { name, color }),
+  deleteTag: (id: number) => request<void>('DELETE', `/api/tags/${id}`),
+  setItemTags: (itemId: number, tagIds: number[]) =>
+    request<ItemDetail>('PUT', `/api/items/${itemId}/tags`, { tag_ids: tagIds }),
 }

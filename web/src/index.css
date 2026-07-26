@@ -1033,6 +1033,16 @@ a.capture-result-tag:hover {
   cursor: pointer;
 }
 
+.item-detail-tags {
+  margin-top: 0.75rem;
+}
+
+.item-detail-tags-empty {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  margin: 0;
+}
+
 .item-carousel {
   display: flex;
   gap: 0.5rem;
@@ -1464,4 +1474,162 @@ a.capture-result-tag:hover {
   padding: 0.3rem 0.8rem;
   cursor: pointer;
   white-space: nowrap;
+}
+
+/* --- tags: chips (--tag-color custom prop drives the color-mix), the
+   toggle-cloud shared by Search's filter row and the item detail editor,
+   and the Settings tag-management section --- */
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tag-color) 55%, transparent);
+  background: color-mix(in srgb, var(--tag-color) 18%, transparent);
+  color: var(--tag-color);
+  white-space: nowrap;
+}
+
+button.tag-chip {
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+button.tag-chip:hover {
+  background: color-mix(in srgb, var(--tag-color) 28%, transparent);
+}
+
+.tag-chip-unselected {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--tag-color) 35%, transparent);
+  opacity: 0.6;
+}
+
+.tag-chip-unselected:hover {
+  opacity: 0.85;
+}
+
+.tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.75em;
+  line-height: 1;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.search-tag-filter {
+  flex-shrink: 0;
+}
+
+.item-card-tags {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 40%;
+}
+
+.tag-color-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tag-color-swatch {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch-color);
+  cursor: pointer;
+}
+
+.tag-color-swatch-selected {
+  border-color: var(--fg);
+}
+
+.tag-color-custom {
+  width: 2rem;
+  height: 1.5rem;
+  padding: 0;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+}
+
+.settings-tags {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.settings-tag-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.settings-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.settings-tag-row-name-input {
+  font: inherit;
+  padding: 0.3rem 0.5rem;
+}
+
+.settings-tag-row-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.settings-tag-row-actions button {
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+}
+
+.settings-new-tag-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.settings-new-tag-form input[type='text'] {
+  padding: 0.4rem;
+  font: inherit;
+}
+
+.settings-new-tag-form button {
+  padding: 0.4rem 1rem;
+  cursor: pointer;
 }
