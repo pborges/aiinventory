@@ -109,7 +109,8 @@ export function LocationView(_props: RouteProps) {
                 onDragLeave={() => setDragOverId(null)}
                 onDrop={(e) => onDropOnLocation(loc, e)}
               >
-                {formatLocationCode(loc.code, loc.description)}
+                <div class="location-sidebar-code">{loc.code}</div>
+                {loc.description && <div class="location-sidebar-desc">{loc.description}</div>}
               </li>
             ))}
             {locations.length === 0 && <li class="location-sidebar-empty">No locations yet.</li>}

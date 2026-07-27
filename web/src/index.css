@@ -1175,7 +1175,9 @@ a.capture-result-tag:hover {
 }
 
 .location-sidebar {
-  width: 12rem;
+  width: fit-content;
+  min-width: 12rem;
+  max-width: 20rem;
   flex-shrink: 0;
   border-right: 1px solid color-mix(in srgb, currentColor 15%, transparent);
   padding: 1rem;
@@ -1198,8 +1200,18 @@ a.capture-result-tag:hover {
 .location-sidebar-item {
   padding: 0.4rem 0.6rem;
   border-radius: 6px;
-  font-family: ui-monospace, Consolas, monospace;
   cursor: pointer;
+}
+
+.location-sidebar-code {
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.location-sidebar-desc {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  opacity: 0.6;
 }
 
 .location-sidebar-item-active {
