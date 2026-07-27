@@ -325,6 +325,7 @@ input[type='radio'] {
   border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
   border-radius: 8px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .item-card-select {
@@ -1463,8 +1464,8 @@ a.capture-result-tag:hover {
 }
 
 .generate-descriptions-thumb {
-  width: 7rem;
-  height: 7rem;
+  width: 14rem;
+  height: 14rem;
   flex-shrink: 0;
   border-radius: 6px;
   overflow: hidden;
