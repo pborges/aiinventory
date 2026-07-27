@@ -358,13 +358,13 @@ input[type='radio'] {
   font-weight: 600;
 }
 
-/* Follows the cursor (see Search.tsx's showHoverPreview) rather than
+/* Follows the cursor (see lib/hoverPreview.tsx's showHoverPreview) rather than
    growing the thumbnail in place, which would cover the row's own text. */
-.search-hover-preview {
+.hover-preview {
   position: fixed;
   z-index: 30;
-  width: 320px;
-  height: 320px;
+  width: 640px;
+  height: 640px;
   object-fit: cover;
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);

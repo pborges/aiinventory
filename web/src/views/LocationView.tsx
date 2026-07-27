@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { api, ApiError, type ActivityEntry, type Location, type LocationItem } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
+import { HoverPreview, useHoverPreview } from '../lib/hoverPreview'
 
 interface RouteProps {
   path?: string
@@ -23,6 +24,7 @@ export function LocationView(_props: RouteProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<number | null>(null)
+  const { preview: hoverPreview, showHoverPreview, hideHoverPreview } = useHoverPreview()
 
   useEffect(() => {
     api
@@ -117,7 +119,14 @@ export function LocationView(_props: RouteProps) {
                     <div class="location-item-carousel">
                       {item.images.length === 0 && <div class="item-card-thumb-placeholder">{item.asset_tag}</div>}
                       {item.images.map((img) => (
-                        <img key={img.id} src={`/api/images/${img.id}`} alt="" />
+                        <img
+                          key={img.id}
+                          src={`/api/images/${img.id}`}
+                          alt=""
+                          onMouseEnter={(e) => showHoverPreview(`/api/images/${img.id}`, e)}
+                          onMouseMove={(e) => showHoverPreview(`/api/images/${img.id}`, e)}
+                          onMouseLeave={hideHoverPreview}
+                        />
                       ))}
                     </div>
                     <p class="location-item-description">{item.description || <em>No description</em>}</p>
@@ -144,6 +153,8 @@ export function LocationView(_props: RouteProps) {
           </ul>
         </footer>
       )}
+
+      <HoverPreview preview={hoverPreview} />
 
       <Footer />
     </div>
