@@ -160,6 +160,7 @@ export interface Location {
   id: number
   code: string
   description?: string
+  tags: Tag[]
 }
 
 // formatLocationCode renders a location's code with its optional description
@@ -254,6 +255,8 @@ export const api = {
   getLocationActivity: (id: number) => request<{ activity: ActivityEntry[] }>('GET', `/api/locations/${id}/activity`),
   moveItemToLocation: (locationId: number, itemId: number) =>
     request<{ item_id: number; location_id: number }>('POST', `/api/locations/${locationId}/move-item`, { item_id: itemId }),
+  setLocationTags: (locationId: number, tagIds: number[]) =>
+    request<{ location: Location }>('PUT', `/api/locations/${locationId}/tags`, { tag_ids: tagIds }),
   duplicatesStatus: () => request<DuplicateStatus>('GET', '/api/duplicates/status'),
   startDuplicateRun: () => request<void>('POST', '/api/duplicates/run'),
   listDuplicateGroups: () => request<{ groups: DuplicateGroup[] }>('GET', '/api/duplicates/groups'),
@@ -274,4 +277,9 @@ export const api = {
   deleteTag: (id: number) => request<void>('DELETE', `/api/tags/${id}`),
   setItemTags: (itemId: number, tagIds: number[]) =>
     request<ItemDetail>('PUT', `/api/items/${itemId}/tags`, { tag_ids: tagIds }),
+  listLocationTags: () => request<{ tags: Tag[] }>('GET', '/api/location-tags'),
+  createLocationTag: (name: string, color: string) => request<{ tag: Tag }>('POST', '/api/location-tags', { name, color }),
+  updateLocationTag: (id: number, name: string, color: string) =>
+    request<{ tag: Tag }>('PUT', `/api/location-tags/${id}`, { name, color }),
+  deleteLocationTag: (id: number) => request<void>('DELETE', `/api/location-tags/${id}`),
 }

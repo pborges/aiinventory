@@ -79,6 +79,7 @@ const (
 	ActivityDuplicateGroupDismissed ActivityAction = "duplicate_group_dismissed"
 	ActivityItemsMerged             ActivityAction = "items_merged"
 	ActivityItemTagsUpdated         ActivityAction = "item_tags_updated"
+	ActivityLocationTagsUpdated     ActivityAction = "location_tags_updated"
 )
 
 type Activity struct {

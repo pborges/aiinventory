@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { api, ApiError, type Settings as SettingsData, type Tag, type UserListItem } from '../api/client'
+import { api, ApiError, type Settings as SettingsData, type UserListItem } from '../api/client'
 import { currentUser } from '../state/auth'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
-import { TagChip } from '../components/TagChip'
-import { TagColorPicker } from '../components/TagColorPicker'
+import { TagManagerSection } from '../components/TagManagerSection'
 
 interface RouteProps {
   path?: string
@@ -45,16 +44,6 @@ export function Settings(_props: RouteProps) {
   const [userError, setUserError] = useState<string | null>(null)
   const [userBusy, setUserBusy] = useState(false)
 
-  const [tags, setTags] = useState<Tag[] | null>(null)
-  const [newTagName, setNewTagName] = useState('')
-  const [newTagColor, setNewTagColor] = useState('#a6e22e')
-  const [editingTagId, setEditingTagId] = useState<number | null>(null)
-  const [editingTagName, setEditingTagName] = useState('')
-  const [editingTagColor, setEditingTagColor] = useState('')
-  const [confirmingDeleteTagId, setConfirmingDeleteTagId] = useState<number | null>(null)
-  const [tagError, setTagError] = useState<string | null>(null)
-  const [tagBusy, setTagBusy] = useState(false)
-
   useEffect(() => {
     api.getSettings().then((s) => {
       setData(s)
@@ -64,7 +53,6 @@ export function Settings(_props: RouteProps) {
       setOverrides(o)
     })
     loadUsers()
-    loadTags()
   }, [])
 
   function loadUsers() {
@@ -72,13 +60,6 @@ export function Settings(_props: RouteProps) {
       .listUsers()
       .then((res) => setUsers(res.users))
       .catch((err) => setUserError(err instanceof ApiError ? err.message : 'Failed to load users'))
-  }
-
-  function loadTags() {
-    api
-      .listTags()
-      .then((res) => setTags(res.tags))
-      .catch((err) => setTagError(err instanceof ApiError ? err.message : 'Failed to load tags'))
   }
 
   function showDefault(key: string) {
@@ -145,57 +126,6 @@ export function Settings(_props: RouteProps) {
       setUserError(err instanceof ApiError ? err.message : 'Failed to update user')
     } finally {
       setUserBusy(false)
-    }
-  }
-
-  async function onCreateTag(e: Event) {
-    e.preventDefault()
-    setTagBusy(true)
-    setTagError(null)
-    try {
-      await api.createTag(newTagName, newTagColor)
-      setNewTagName('')
-      loadTags()
-    } catch (err) {
-      setTagError(err instanceof ApiError ? err.message : 'Failed to create tag')
-    } finally {
-      setTagBusy(false)
-    }
-  }
-
-  function startEditingTag(tag: Tag) {
-    setEditingTagId(tag.id)
-    setEditingTagName(tag.name)
-    setEditingTagColor(tag.color)
-  }
-
-  async function onSaveTagEdit(e: Event) {
-    e.preventDefault()
-    if (editingTagId == null) return
-    setTagBusy(true)
-    setTagError(null)
-    try {
-      await api.updateTag(editingTagId, editingTagName, editingTagColor)
-      setEditingTagId(null)
-      loadTags()
-    } catch (err) {
-      setTagError(err instanceof ApiError ? err.message : 'Failed to update tag')
-    } finally {
-      setTagBusy(false)
-    }
-  }
-
-  async function onDeleteTag(tag: Tag) {
-    setTagBusy(true)
-    setTagError(null)
-    try {
-      await api.deleteTag(tag.id)
-      setConfirmingDeleteTagId(null)
-      loadTags()
-    } catch (err) {
-      setTagError(err instanceof ApiError ? err.message : 'Failed to delete tag')
-    } finally {
-      setTagBusy(false)
     }
   }
 
@@ -317,74 +247,23 @@ export function Settings(_props: RouteProps) {
               {userError && <p class="settings-status settings-status-error">{userError}</p>}
             </section>
 
-            <section class="settings-tags">
-              <h2>Tags</h2>
+            <TagManagerSection
+              title="Tags"
+              deleteWarningTarget="item"
+              list={api.listTags}
+              create={api.createTag}
+              update={api.updateTag}
+              remove={api.deleteTag}
+            />
 
-              <ul class="settings-tag-list">
-                {tags === null && <li>Loading…</li>}
-                {tags?.map((tag) =>
-                  editingTagId === tag.id ? (
-                    <li class="settings-tag-row" key={tag.id}>
-                      <form class="settings-new-tag-form" onSubmit={onSaveTagEdit}>
-                        <input
-                          type="text"
-                          class="settings-tag-row-name-input"
-                          value={editingTagName}
-                          onInput={(e) => setEditingTagName((e.target as HTMLInputElement).value)}
-                          required
-                        />
-                        <TagColorPicker value={editingTagColor} onChange={setEditingTagColor} />
-                        <button type="submit" class="btn-primary" disabled={tagBusy}>
-                          Save
-                        </button>
-                        <button type="button" onClick={() => setEditingTagId(null)} disabled={tagBusy}>
-                          Cancel
-                        </button>
-                      </form>
-                    </li>
-                  ) : (
-                    <li class="settings-tag-row" key={tag.id}>
-                      <TagChip tag={tag} />
-                      {confirmingDeleteTagId === tag.id ? (
-                        <span class="settings-tag-row-actions">
-                          Delete “{tag.name}” and remove it from every item?
-                          <button type="button" onClick={() => setConfirmingDeleteTagId(null)} disabled={tagBusy}>
-                            Cancel
-                          </button>
-                          <button type="button" class="btn-danger" onClick={() => onDeleteTag(tag)} disabled={tagBusy}>
-                            {tagBusy ? 'Deleting…' : 'Confirm delete'}
-                          </button>
-                        </span>
-                      ) : (
-                        <span class="settings-tag-row-actions">
-                          <button type="button" onClick={() => startEditingTag(tag)} disabled={tagBusy}>
-                            Edit
-                          </button>
-                          <button type="button" onClick={() => setConfirmingDeleteTagId(tag.id)} disabled={tagBusy}>
-                            Delete
-                          </button>
-                        </span>
-                      )}
-                    </li>
-                  ),
-                )}
-              </ul>
-
-              <form class="settings-new-tag-form" onSubmit={onCreateTag}>
-                <input
-                  type="text"
-                  placeholder="Tag name"
-                  value={newTagName}
-                  onInput={(e) => setNewTagName((e.target as HTMLInputElement).value)}
-                  required
-                />
-                <TagColorPicker value={newTagColor} onChange={setNewTagColor} />
-                <button type="submit" class="btn-primary" disabled={tagBusy}>
-                  Add tag
-                </button>
-              </form>
-              {tagError && <p class="settings-status settings-status-error">{tagError}</p>}
-            </section>
+            <TagManagerSection
+              title="Location tags"
+              deleteWarningTarget="location"
+              list={api.listLocationTags}
+              create={api.createLocationTag}
+              update={api.updateLocationTag}
+              remove={api.deleteLocationTag}
+            />
           </>
         )}
       </div>

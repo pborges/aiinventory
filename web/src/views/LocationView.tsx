@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'preact/hooks'
-import { api, ApiError, formatLocationCode, type ActivityEntry, type Location, type LocationItem } from '../api/client'
+import { api, ApiError, formatLocationCode, type ActivityEntry, type Location, type LocationItem, type Tag } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
+import { TagChip } from '../components/TagChip'
 import { HoverPreview, useHoverPreview } from '../lib/hoverPreview'
 
 interface RouteProps {
@@ -26,6 +27,9 @@ export function LocationView(_props: RouteProps) {
   const [dragOverId, setDragOverId] = useState<number | null>(null)
   const [descriptionInput, setDescriptionInput] = useState('')
   const [savingDescription, setSavingDescription] = useState(false)
+  const [allLocationTags, setAllLocationTags] = useState<Tag[]>([])
+  const [selectedTagFilterIds, setSelectedTagFilterIds] = useState<Set<number>>(new Set())
+  const [tagsBusy, setTagsBusy] = useState(false)
   const { preview: hoverPreview, showHoverPreview, hideHoverPreview } = useHoverPreview()
 
   useEffect(() => {
@@ -40,6 +44,7 @@ export function LocationView(_props: RouteProps) {
         setError(err instanceof ApiError ? err.message : 'Failed to load locations')
         setLoading(false)
       })
+    api.listLocationTags().then((res) => setAllLocationTags(res.tags))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -72,6 +77,37 @@ export function LocationView(_props: RouteProps) {
     }
   }
 
+  function toggleTagFilter(tagId: number) {
+    setSelectedTagFilterIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(tagId)) next.delete(tagId)
+      else next.add(tagId)
+      return next
+    })
+  }
+
+  async function onToggleLocationTag(tag: Tag) {
+    if (!selected) return
+    const current = new Set(selected.tags.map((t) => t.id))
+    if (current.has(tag.id)) current.delete(tag.id)
+    else current.add(tag.id)
+    const nextIds = [...current]
+
+    // optimistic toggle, then persist
+    setSelected({ ...selected, tags: allLocationTags.filter((t) => current.has(t.id)) })
+    setTagsBusy(true)
+    try {
+      const { location } = await api.setLocationTags(selected.id, nextIds)
+      setSelected(location)
+      setLocations((prev) => prev.map((loc) => (loc.id === location.id ? location : loc)))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to update tags')
+      selectLocation(selected)
+    } finally {
+      setTagsBusy(false)
+    }
+  }
+
   function onDropOnLocation(loc: Location, e: DragEvent) {
     e.preventDefault()
     setDragOverId(null)
@@ -85,6 +121,11 @@ export function LocationView(_props: RouteProps) {
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Move failed'))
   }
 
+  const visibleLocations =
+    selectedTagFilterIds.size === 0
+      ? locations
+      : locations.filter((loc) => loc.tags.some((t) => selectedTagFilterIds.has(t.id)))
+
   return (
     <div class="location-view">
       <Header active="locations" />
@@ -92,8 +133,20 @@ export function LocationView(_props: RouteProps) {
       <div class="location-layout">
         <aside class="location-sidebar">
           <h2>Locations</h2>
+          {allLocationTags.length > 0 && (
+            <div class="tag-cloud location-sidebar-tag-filter">
+              {allLocationTags.map((tag) => (
+                <TagChip
+                  key={tag.id}
+                  tag={tag}
+                  selected={selectedTagFilterIds.has(tag.id)}
+                  onClick={() => toggleTagFilter(tag.id)}
+                />
+              ))}
+            </div>
+          )}
           <ul>
-            {locations.map((loc) => (
+            {visibleLocations.map((loc) => (
               <li
                 key={loc.id}
                 class={
@@ -113,7 +166,11 @@ export function LocationView(_props: RouteProps) {
                 {loc.description && <div class="location-sidebar-desc">{loc.description}</div>}
               </li>
             ))}
-            {locations.length === 0 && <li class="location-sidebar-empty">No locations yet.</li>}
+            {visibleLocations.length === 0 && (
+              <li class="location-sidebar-empty">
+                {locations.length === 0 ? 'No locations yet.' : 'No locations match the selected tags.'}
+              </li>
+            )}
           </ul>
         </aside>
 
@@ -135,6 +192,19 @@ export function LocationView(_props: RouteProps) {
                 <button type="button" class="btn-primary" onClick={onSaveDescription} disabled={savingDescription}>
                   {savingDescription ? 'Saving…' : 'Save'}
                 </button>
+              </div>
+              <div class="tag-cloud location-tags-editor">
+                {allLocationTags.length === 0 && (
+                  <p class="location-tags-empty">No location tags yet — create some in Settings.</p>
+                )}
+                {allLocationTags.map((tag) => (
+                  <TagChip
+                    key={tag.id}
+                    tag={tag}
+                    selected={selected.tags.some((t) => t.id === tag.id)}
+                    onClick={() => !tagsBusy && onToggleLocationTag(tag)}
+                  />
+                ))}
               </div>
               <ul class="location-item-list">
                 {items.length === 0 && <p>No items at this location.</p>}
