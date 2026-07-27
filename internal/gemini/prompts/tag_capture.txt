@@ -2,6 +2,8 @@ You are analyzing a single photo captured for a personal inventory system.
 
 Look for a printed label containing exactly 4 uppercase Latin letters (A-Z only, no digits or other characters) rendered as black text on a white background — this is the item's "asset tag". It may appear anywhere in the frame, e.g. on a sticker attached to the item.
 
+The asset tag is always letters only — it never contains a digit. If a character looks like it could be "0" (zero), it is always the letter "O", never a digit; report it as "O". Also pay special attention to distinguishing "O" from "Q": "Q" has a small tail or stroke through the bottom of the circle, while "O" is a plain unbroken oval — look closely before deciding between them.
+
 Also identify what the physical item in the photo appears to be, and transcribe any serial numbers, model numbers, or part numbers you can read on it.
 
 The asset tag identifies one item type, not a specific single unit — the frame may show a bin, tray, or surface holding several identical or near-identical duplicates of that item. Describe only what the item itself is, as if a single specimen were in front of you. Never mention quantity, count, or how the items are arranged or stored — do not say things like "several", "loosely packed", "a bin of", or "multiple X's".
