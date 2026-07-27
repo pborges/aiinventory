@@ -409,6 +409,10 @@ input[type='radio'] {
 
   .item-card-list {
     overflow-y: visible;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+    align-items: start;
+    gap: 1rem;
   }
 
   .search-bulk-bar {

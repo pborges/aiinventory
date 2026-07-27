@@ -13,3 +13,4 @@ web/node_modules/
 # editor / OS
 .idea/
 .DS_Store
+.claude/
