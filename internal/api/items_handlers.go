@@ -27,14 +27,15 @@ type activityResponse struct {
 }
 
 type itemDetailResponse struct {
-	ID           int64               `json:"id"`
-	AssetTag     string              `json:"asset_tag"`
-	Description  string              `json:"description"`
-	LocationID   *int64              `json:"location_id,omitempty"`
-	LocationCode string              `json:"location_code,omitempty"`
-	Images       []itemImageResponse `json:"images"`
-	Activity     []activityResponse  `json:"activity"`
-	Tags         []tagResponse       `json:"tags"`
+	ID                  int64               `json:"id"`
+	AssetTag            string              `json:"asset_tag"`
+	Description         string              `json:"description"`
+	LocationID          *int64              `json:"location_id,omitempty"`
+	LocationCode        string              `json:"location_code,omitempty"`
+	LocationDescription string              `json:"location_description,omitempty"`
+	Images              []itemImageResponse `json:"images"`
+	Activity            []activityResponse  `json:"activity"`
+	Tags                []tagResponse       `json:"tags"`
 }
 
 func toActivityResponse(a domain.Activity) activityResponse {
@@ -77,10 +78,11 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		imageResponses = append(imageResponses, itemImageResponse{ID: img.ID, Description: img.Description, SortOrder: img.SortOrder})
 	}
 
-	var locationCode string
+	var locationCode, locationDescription string
 	if item.LocationID != nil {
 		if loc, err := s.store.GetLocationByID(ctx, *item.LocationID); err == nil {
 			locationCode = loc.Code
+			locationDescription = loc.Description
 		}
 	}
 
@@ -101,14 +103,15 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, itemDetailResponse{
-		ID:           item.ID,
-		AssetTag:     item.AssetTag,
-		Description:  item.Description,
-		LocationID:   item.LocationID,
-		LocationCode: locationCode,
-		Images:       imageResponses,
-		Activity:     activityResponses,
-		Tags:         toTagResponses(tags),
+		ID:                  item.ID,
+		AssetTag:            item.AssetTag,
+		Description:         item.Description,
+		LocationID:          item.LocationID,
+		LocationCode:        locationCode,
+		LocationDescription: locationDescription,
+		Images:              imageResponses,
+		Activity:            activityResponses,
+		Tags:                toTagResponses(tags),
 	})
 }
 

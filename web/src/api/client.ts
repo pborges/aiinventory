@@ -117,6 +117,7 @@ export interface ItemSummary {
   asset_tag: string
   description: string
   location_code?: string
+  location_description?: string
   primary_image_id?: number
   tags: Tag[]
 }
@@ -149,6 +150,7 @@ export interface ItemDetail {
   description: string
   location_id?: number
   location_code?: string
+  location_description?: string
   images: ItemImage[]
   activity: ActivityEntry[]
   tags: Tag[]
@@ -157,6 +159,14 @@ export interface ItemDetail {
 export interface Location {
   id: number
   code: string
+  description?: string
+}
+
+// formatLocationCode renders a location's code with its optional description
+// appended, e.g. "@XYZ (Break room shelf)" — the "@XYZ (description)" shape
+// used everywhere a location code is displayed.
+export function formatLocationCode(code: string, description?: string): string {
+  return description ? `${code} (${description})` : code
 }
 
 export interface LocationItem {
@@ -238,6 +248,8 @@ export const api = {
   regenerateItemDescription: (itemId: number, hint?: string) =>
     request<ItemDetail>('POST', `/api/items/${itemId}/regenerate-description`, hint ? { hint } : undefined),
   listLocations: () => request<{ locations: Location[] }>('GET', '/api/locations'),
+  updateLocation: (id: number, description: string) =>
+    request<{ location: Location }>('PUT', `/api/locations/${id}`, { description }),
   getLocationItems: (id: number) => request<{ items: LocationItem[] }>('GET', `/api/locations/${id}/items`),
   getLocationActivity: (id: number) => request<{ activity: ActivityEntry[] }>('GET', `/api/locations/${id}/activity`),
   moveItemToLocation: (locationId: number, itemId: number) =>

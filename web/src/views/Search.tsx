@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { faLocationDot, faXmark } from '@fortawesome/free-solid-svg-icons'
-import { api, ApiError, type ItemSummary, type Tag } from '../api/client'
+import { api, ApiError, formatLocationCode, type ItemSummary, type Tag } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { GenerateDescriptionsModal } from '../components/GenerateDescriptionsModal'
@@ -13,14 +13,15 @@ interface RouteProps {
   default?: boolean
 }
 
-function parseLocationFilterFromURL(): { id: number; code: string } | null {
+function parseLocationFilterFromURL(): { id: number; code: string; description?: string } | null {
   const params = new URLSearchParams(window.location.search)
   const idStr = params.get('location_id')
   const code = params.get('location_code')
+  const description = params.get('location_description')
   if (!idStr) return null
   const id = parseInt(idStr, 10)
   if (Number.isNaN(id)) return null
-  return { id, code: code ?? '' }
+  return { id, code: code ?? '', description: description ?? undefined }
 }
 
 export function Search(_props: RouteProps) {
@@ -158,7 +159,8 @@ export function Search(_props: RouteProps) {
           </label>
           {locationFilter && (
             <span class="search-location-chip">
-              <Icon icon={faLocationDot} /> {locationFilter.code || `location #${locationFilter.id}`}
+              <Icon icon={faLocationDot} />{' '}
+              {locationFilter.code ? formatLocationCode(locationFilter.code, locationFilter.description) : `location #${locationFilter.id}`}
               <button type="button" class="link-button" onClick={() => setLocationFilter(null)} aria-label="Clear location filter">
                 <Icon icon={faXmark} />
               </button>
@@ -215,7 +217,9 @@ export function Search(_props: RouteProps) {
                 <div class="item-card-info">
                   <div class="item-card-tag">{item.asset_tag}</div>
                   <div class="item-card-description">{item.description || <em>No description</em>}</div>
-                  {item.location_code && <div class="item-card-location">{item.location_code}</div>}
+                  {item.location_code && (
+                    <div class="item-card-location">{formatLocationCode(item.location_code, item.location_description)}</div>
+                  )}
                 </div>
               </a>
               {item.tags.length > 0 && (

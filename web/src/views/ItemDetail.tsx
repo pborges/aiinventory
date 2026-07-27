@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { route } from 'preact-router'
 import { faLocationDot, faXmark } from '@fortawesome/free-solid-svg-icons'
-import { api, ApiError, type ItemDetail as ItemDetailData, type Tag } from '../api/client'
+import { api, ApiError, formatLocationCode, type ItemDetail as ItemDetailData, type Tag } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { Icon } from '../components/Icon'
@@ -178,9 +178,9 @@ export function ItemDetail({ id }: RouteProps) {
               {detail.location_code && (
                 <a
                   class="item-detail-location"
-                  href={`/search?location_id=${detail.location_id}&location_code=${encodeURIComponent(detail.location_code)}`}
+                  href={`/search?location_id=${detail.location_id}&location_code=${encodeURIComponent(detail.location_code)}${detail.location_description ? `&location_description=${encodeURIComponent(detail.location_description)}` : ''}`}
                 >
-                  <Icon icon={faLocationDot} /> {detail.location_code}
+                  <Icon icon={faLocationDot} /> {formatLocationCode(detail.location_code, detail.location_description)}
                 </a>
               )}
 

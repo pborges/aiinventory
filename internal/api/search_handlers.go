@@ -10,12 +10,13 @@ import (
 )
 
 type itemSummaryResponse struct {
-	ID             int64         `json:"id"`
-	AssetTag       string        `json:"asset_tag"`
-	Description    string        `json:"description"`
-	LocationCode   string        `json:"location_code,omitempty"`
-	PrimaryImageID *int64        `json:"primary_image_id,omitempty"`
-	Tags           []tagResponse `json:"tags"`
+	ID                  int64         `json:"id"`
+	AssetTag            string        `json:"asset_tag"`
+	Description         string        `json:"description"`
+	LocationCode        string        `json:"location_code,omitempty"`
+	LocationDescription string        `json:"location_description,omitempty"`
+	PrimaryImageID      *int64        `json:"primary_image_id,omitempty"`
+	Tags                []tagResponse `json:"tags"`
 }
 
 // handleSearch implements the Search view (README flow #3): a free-text
@@ -54,12 +55,13 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	out := make([]itemSummaryResponse, 0, len(results))
 	for _, it := range results {
 		out = append(out, itemSummaryResponse{
-			ID:             it.ID,
-			AssetTag:       it.AssetTag,
-			Description:    it.Description,
-			LocationCode:   it.LocationCode,
-			PrimaryImageID: it.PrimaryImageID,
-			Tags:           toTagResponses(it.Tags),
+			ID:                  it.ID,
+			AssetTag:            it.AssetTag,
+			Description:         it.Description,
+			LocationCode:        it.LocationCode,
+			LocationDescription: it.LocationDescription,
+			PrimaryImageID:      it.PrimaryImageID,
+			Tags:                toTagResponses(it.Tags),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})
@@ -93,4 +95,3 @@ func (s *Server) handleBulkDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"deleted": deleted})
 }
-

@@ -1,16 +1,24 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/pborges/aiinventory/internal/auth"
+	"github.com/pborges/aiinventory/internal/domain"
 	"github.com/pborges/aiinventory/internal/inventory"
+	"github.com/pborges/aiinventory/internal/store"
 )
 
 type locationResponse struct {
-	ID   int64  `json:"id"`
-	Code string `json:"code"`
+	ID          int64  `json:"id"`
+	Code        string `json:"code"`
+	Description string `json:"description,omitempty"`
+}
+
+func toLocationResponse(loc domain.Location) locationResponse {
+	return locationResponse{ID: loc.ID, Code: loc.Code, Description: loc.Description}
 }
 
 // handleListLocations powers the location view's sidebar (README flow #4).
@@ -22,9 +30,45 @@ func (s *Server) handleListLocations(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]locationResponse, 0, len(locations))
 	for _, loc := range locations {
-		out = append(out, locationResponse{ID: loc.ID, Code: loc.Code})
+		out = append(out, toLocationResponse(loc))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"locations": out})
+}
+
+type updateLocationRequest struct {
+	Description string `json:"description"`
+}
+
+// handleUpdateLocation sets (or clears) a location's optional description —
+// the locations view's under-the-code editor for the selected location.
+func (s *Server) handleUpdateLocation(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid location id")
+		return
+	}
+	var req updateLocationRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	ctx := r.Context()
+	if err := s.store.UpdateLocationDescription(ctx, id, req.Description); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	loc, err := s.store.GetLocationByID(ctx, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]locationResponse{"location": toLocationResponse(loc)})
 }
 
 type locationItemResponse struct {

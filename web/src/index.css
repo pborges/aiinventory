@@ -1226,6 +1226,23 @@ a.capture-result-tag:hover {
   overflow-y: auto;
 }
 
+.location-description-editor {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+}
+
+.location-description-editor label {
+  flex-shrink: 0;
+}
+
+.location-description-editor input {
+  flex: 1;
+  max-width: 24rem;
+}
+
 .location-item-list {
   list-style: none;
   margin: 0;

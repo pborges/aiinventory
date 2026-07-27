@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { api, ApiError, type ActivityEntry, type Location, type LocationItem } from '../api/client'
+import { api, ApiError, formatLocationCode, type ActivityEntry, type Location, type LocationItem } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { HoverPreview, useHoverPreview } from '../lib/hoverPreview'
@@ -24,6 +24,8 @@ export function LocationView(_props: RouteProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<number | null>(null)
+  const [descriptionInput, setDescriptionInput] = useState('')
+  const [savingDescription, setSavingDescription] = useState(false)
   const { preview: hoverPreview, showHoverPreview, hideHoverPreview } = useHoverPreview()
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export function LocationView(_props: RouteProps) {
 
   function selectLocation(loc: Location) {
     setSelected(loc)
+    setDescriptionInput(loc.description ?? '')
     setLoading(true)
     setError(null)
     Promise.all([api.getLocationItems(loc.id), api.getLocationActivity(loc.id)])
@@ -52,6 +55,21 @@ export function LocationView(_props: RouteProps) {
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load location'))
       .finally(() => setLoading(false))
+  }
+
+  async function onSaveDescription() {
+    if (!selected) return
+    setSavingDescription(true)
+    setError(null)
+    try {
+      const { location } = await api.updateLocation(selected.id, descriptionInput)
+      setSelected(location)
+      setLocations((prev) => prev.map((loc) => (loc.id === location.id ? location : loc)))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Save failed')
+    } finally {
+      setSavingDescription(false)
+    }
   }
 
   function onDropOnLocation(loc: Location, e: DragEvent) {
@@ -91,7 +109,7 @@ export function LocationView(_props: RouteProps) {
                 onDragLeave={() => setDragOverId(null)}
                 onDrop={(e) => onDropOnLocation(loc, e)}
               >
-                {loc.code}
+                {formatLocationCode(loc.code, loc.description)}
               </li>
             ))}
             {locations.length === 0 && <li class="location-sidebar-empty">No locations yet.</li>}
@@ -104,6 +122,19 @@ export function LocationView(_props: RouteProps) {
           {!loading && selected && (
             <>
               <h1>{selected.code}</h1>
+              <div class="location-description-editor">
+                <label for="location-description-field">Description</label>
+                <input
+                  id="location-description-field"
+                  type="text"
+                  placeholder="No description set"
+                  value={descriptionInput}
+                  onInput={(e) => setDescriptionInput((e.target as HTMLInputElement).value)}
+                />
+                <button type="button" class="btn-primary" onClick={onSaveDescription} disabled={savingDescription}>
+                  {savingDescription ? 'Saving…' : 'Save'}
+                </button>
+              </div>
               <ul class="location-item-list">
                 {items.length === 0 && <p>No items at this location.</p>}
                 {items.map((item) => (
@@ -140,7 +171,7 @@ export function LocationView(_props: RouteProps) {
 
       {selected && (
         <footer class="location-activity-footer">
-          <h3>Activity — {selected.code}</h3>
+          <h3>Activity — {formatLocationCode(selected.code, selected.description)}</h3>
           <ul class="activity-log">
             {activity.length === 0 && <li>No activity yet.</li>}
             {activity.map((a, i) => (

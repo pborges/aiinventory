@@ -12,10 +12,11 @@ type User struct {
 }
 
 type Location struct {
-	ID        int64
-	Code      string // "@" + 3 uppercase-alpha chars
-	CreatedAt time.Time
-	CreatedBy int64
+	ID          int64
+	Code        string // "@" + 3 uppercase-alpha chars
+	Description string // "" if not set
+	CreatedAt   time.Time
+	CreatedBy   int64
 }
 
 type Item struct {

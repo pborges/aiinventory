@@ -74,4 +74,3 @@ func TestBulkDelete(t *testing.T) {
 		t.Fatalf("items after bulk delete = %+v, want none", afterResp.Items)
 	}
 }
-

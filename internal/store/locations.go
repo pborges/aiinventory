@@ -12,12 +12,12 @@ import (
 
 func (s *Store) GetLocationByCode(ctx context.Context, code string) (domain.Location, error) {
 	return s.scanLocation(s.db.QueryRowContext(ctx, `
-		SELECT id, code, created_at, created_by FROM locations WHERE code = ?`, code))
+		SELECT id, code, description, created_at, created_by FROM locations WHERE code = ?`, code))
 }
 
 func (s *Store) GetLocationByID(ctx context.Context, id int64) (domain.Location, error) {
 	return s.scanLocation(s.db.QueryRowContext(ctx, `
-		SELECT id, code, created_at, created_by FROM locations WHERE id = ?`, id))
+		SELECT id, code, description, created_at, created_by FROM locations WHERE id = ?`, id))
 }
 
 // GetOrCreateLocation returns the location for code, creating it (attributed
@@ -50,7 +50,7 @@ func (s *Store) GetOrCreateLocation(ctx context.Context, code string, userID int
 func (s *Store) scanLocation(row *sql.Row) (domain.Location, error) {
 	var loc domain.Location
 	var createdAt string
-	if err := row.Scan(&loc.ID, &loc.Code, &createdAt, &loc.CreatedBy); err != nil {
+	if err := row.Scan(&loc.ID, &loc.Code, &loc.Description, &createdAt, &loc.CreatedBy); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Location{}, ErrNotFound
 		}
@@ -62,7 +62,7 @@ func (s *Store) scanLocation(row *sql.Row) (domain.Location, error) {
 
 // ListLocations powers the location view's sidebar (README flow #4).
 func (s *Store) ListLocations(ctx context.Context) ([]domain.Location, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, code, created_at, created_by FROM locations ORDER BY code`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, code, description, created_at, created_by FROM locations ORDER BY code`)
 	if err != nil {
 		return nil, fmt.Errorf("list locations: %w", err)
 	}
@@ -72,13 +72,31 @@ func (s *Store) ListLocations(ctx context.Context) ([]domain.Location, error) {
 	for rows.Next() {
 		var loc domain.Location
 		var createdAt string
-		if err := rows.Scan(&loc.ID, &loc.Code, &createdAt, &loc.CreatedBy); err != nil {
+		if err := rows.Scan(&loc.ID, &loc.Code, &loc.Description, &createdAt, &loc.CreatedBy); err != nil {
 			return nil, fmt.Errorf("scan location: %w", err)
 		}
 		loc.CreatedAt, _ = time.Parse(time.DateTime, createdAt)
 		out = append(out, loc)
 	}
 	return out, rows.Err()
+}
+
+// UpdateLocationDescription sets (or clears, with "") a location's optional
+// description — the locations view's under-the-code editor for the
+// currently selected location.
+func (s *Store) UpdateLocationDescription(ctx context.Context, id int64, description string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE locations SET description = ? WHERE id = ?`, description, id)
+	if err != nil {
+		return fmt.Errorf("update location description: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ListItemsByLocation returns the items currently linked to locationID.

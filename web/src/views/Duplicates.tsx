@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { api, ApiError, type DuplicateGroup, type Location } from '../api/client'
+import { api, ApiError, formatLocationCode, type DuplicateGroup, type Location } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 
@@ -153,7 +153,7 @@ export function Duplicates(_props: RouteProps) {
                   <option value="">Keep survivor's current location</option>
                   {locations.map((loc) => (
                     <option value={String(loc.id)} key={loc.id}>
-                      {loc.code}
+                      {formatLocationCode(loc.code, loc.description)}
                     </option>
                   ))}
                 </select>

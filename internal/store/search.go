@@ -22,15 +22,16 @@ type SearchParams struct {
 // description, location code, primary image, tags) without shipping full
 // image bytes — the frontend fetches those separately via GET /api/images/{id}.
 type ItemSummary struct {
-	ID             int64
-	AssetTag       string
-	Description    string
-	LocationCode   string // "" if unlinked
-	PrimaryImageID *int64
-	Tags           []domain.Tag
+	ID                  int64
+	AssetTag            string
+	Description         string
+	LocationCode        string // "" if unlinked
+	LocationDescription string // "" if unlinked or the location has no description set
+	PrimaryImageID      *int64
+	Tags                []domain.Tag
 }
 
-const itemSummaryColumns = `items.id, items.asset_tag, items.description, locations.code,
+const itemSummaryColumns = `items.id, items.asset_tag, items.description, locations.code, locations.description,
 	       (SELECT images.id FROM images WHERE images.item_id = items.id ORDER BY images.sort_order LIMIT 1)`
 
 const itemSummarySelect = `
@@ -162,13 +163,14 @@ func scanItemSummaries(rows *sql.Rows) ([]ItemSummary, error) {
 	var out []ItemSummary
 	for rows.Next() {
 		var it ItemSummary
-		var description, locationCode sql.NullString
+		var description, locationCode, locationDescription sql.NullString
 		var primaryImageID sql.NullInt64
-		if err := rows.Scan(&it.ID, &it.AssetTag, &description, &locationCode, &primaryImageID); err != nil {
+		if err := rows.Scan(&it.ID, &it.AssetTag, &description, &locationCode, &locationDescription, &primaryImageID); err != nil {
 			return nil, fmt.Errorf("scan item summary: %w", err)
 		}
 		it.Description = description.String
 		it.LocationCode = locationCode.String
+		it.LocationDescription = locationDescription.String
 		if primaryImageID.Valid {
 			it.PrimaryImageID = &primaryImageID.Int64
 		}
