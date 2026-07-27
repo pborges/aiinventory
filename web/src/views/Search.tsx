@@ -197,9 +197,6 @@ export function Search(_props: RouteProps) {
         <ul class="item-card-list">
           {items.map((item) => (
             <li class="item-card" key={item.id}>
-              <label class="item-card-select">
-                <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelected(item.id)} />
-              </label>
               <a class="item-card-link" href={`/items/${item.id}`}>
                 <div class="item-card-thumb">
                   {item.primary_image_id ? (
@@ -214,21 +211,26 @@ export function Search(_props: RouteProps) {
                     <div class="item-card-thumb-placeholder">{item.asset_tag}</div>
                   )}
                 </div>
-                <div class="item-card-info">
-                  <div class="item-card-tag">{item.asset_tag}</div>
-                  <div class="item-card-description">{item.description || <em>No description</em>}</div>
-                  {item.location_code && (
-                    <div class="item-card-location">{formatLocationCode(item.location_code, item.location_description)}</div>
+                <div class="item-card-body">
+                  <div class="item-card-info">
+                    <div class="item-card-tag">{item.asset_tag}</div>
+                    <div class="item-card-description">{item.description || <em>No description</em>}</div>
+                    {item.location_code && (
+                      <div class="item-card-location">{formatLocationCode(item.location_code, item.location_description)}</div>
+                    )}
+                  </div>
+                  {item.tags.length > 0 && (
+                    <div class="item-card-tags">
+                      {item.tags.map((tag) => (
+                        <TagChip key={tag.id} tag={tag} />
+                      ))}
+                    </div>
                   )}
                 </div>
               </a>
-              {item.tags.length > 0 && (
-                <div class="item-card-tags">
-                  {item.tags.map((tag) => (
-                    <TagChip key={tag.id} tag={tag} />
-                  ))}
-                </div>
-              )}
+              <label class="item-card-select">
+                <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelected(item.id)} />
+              </label>
             </li>
           ))}
         </ul>
