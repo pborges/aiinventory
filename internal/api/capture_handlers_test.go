@@ -187,6 +187,29 @@ func TestCapturePreviewNoAssetTagFound(t *testing.T) {
 	}
 }
 
+func TestCapturePreviewRejectsMalformedAssetTag(t *testing.T) {
+	// Gemini's JSON schema only constrains asset_tag to a string — a misread
+	// (wrong letter count, stray digit, lowercase) can still come back as
+	// "valid" JSON. The deterministic shape check must catch it here, before
+	// the user ever sees an accept screen for it.
+	for _, tag := range []string{"ZK3I", "zkei", "ZKEIX", "ZKE"} {
+		fake := &gemini.Fake{
+			TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: tag},
+		}
+		h, cookies := newTestServerWithGemini(t, fake)
+
+		w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("photo"), nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("tag %q: status = %d, body = %s", tag, w.Code, w.Body.String())
+		}
+		var resp capturePreviewResponse
+		json.NewDecoder(w.Body).Decode(&resp)
+		if resp.HasAssetTag {
+			t.Errorf("tag %q: HasAssetTag = true, want false", tag)
+		}
+	}
+}
+
 func TestCapturePreviewExistingItemNotFlaggedAsNew(t *testing.T) {
 	fake := &gemini.Fake{
 		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"},

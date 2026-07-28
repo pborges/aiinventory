@@ -90,7 +90,11 @@ func (s *Server) handleCapturePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !analysis.HasAssetTag {
+	if !analysis.HasAssetTag || !assetTagPattern.MatchString(analysis.AssetTag) {
+		// A misread (wrong letter count, stray digit, lowercase, etc.) can
+		// still come back as "valid" JSON from Gemini's schema — the
+		// deterministic shape check must catch it here, before the user
+		// ever sees an accept screen for a tag that would fail at apply.
 		writeJSON(w, http.StatusOK, capturePreviewResponse{HasAssetTag: false})
 		return
 	}

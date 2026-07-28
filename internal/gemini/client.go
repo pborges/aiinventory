@@ -164,6 +164,11 @@ func (g *GenAIClient) generateJSON(ctx context.Context, model string, schema *ge
 	resp, err := g.client.Models.GenerateContent(ctx, model, []*genai.Content{content}, &genai.GenerateContentConfig{
 		ResponseMIMEType: "application/json",
 		ResponseSchema:   schema,
+		// These calls read fixed facts off a photo (a tag, a code) or
+		// consolidate existing text — never open-ended generation — so
+		// sampling randomness only adds hallucination risk with no upside.
+		Temperature: genai.Ptr[float32](0),
+		TopK:        genai.Ptr[float32](1),
 	})
 	if err != nil {
 		return fmt.Errorf("gemini: generate content: %w", err)

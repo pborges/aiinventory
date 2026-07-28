@@ -76,6 +76,62 @@ func TestReconcilePreviewAndApplyFullFlow(t *testing.T) {
 	}
 }
 
+func TestReconcilePreviewRejectsMalformedLocationCode(t *testing.T) {
+	// Gemini's JSON schema only constrains this to a string — a misread
+	// (wrong letter count, stray digit, lowercase) can still come back as
+	// "valid" JSON. The deterministic shape check must catch it before a
+	// diff is ever computed/shown.
+	for _, code := range []string{"@XY", "@WXYZ", "@xyz", "@X1Z", "XYZ", "@"} {
+		fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{HasLocationCode: true, LocationCode: code, AssetTags: []string{"ZKEI"}}}
+		h, cookies := newTestServerWithGemini(t, fake)
+
+		req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
+		if req.Code != http.StatusOK {
+			t.Fatalf("code %q: status = %d, body = %s", code, req.Code, req.Body.String())
+		}
+		var resp reconcileDiffResponse
+		json.NewDecoder(req.Body).Decode(&resp)
+		if resp.HasLocationCode {
+			t.Errorf("code %q: HasLocationCode = true, want false", code)
+		}
+	}
+}
+
+func TestReconcilePreviewRejectsMalformedAssetTag(t *testing.T) {
+	// A valid location code alongside a garbled asset tag must reject the
+	// whole preview rather than silently reconciling against a partial tag
+	// set (which could show real items as falsely "removed").
+	for _, tags := range [][]string{{"ZK3I"}, {"zkei"}, {"ZKEIX"}, {"ZKEI", "O0F9"}} {
+		fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{HasLocationCode: true, LocationCode: "@XYZ", AssetTags: tags}}
+		h, cookies := newTestServerWithGemini(t, fake)
+
+		req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
+		if req.Code != http.StatusOK {
+			t.Fatalf("tags %v: status = %d, body = %s", tags, req.Code, req.Body.String())
+		}
+		var resp reconcileDiffResponse
+		json.NewDecoder(req.Body).Decode(&resp)
+		if resp.HasLocationCode {
+			t.Errorf("tags %v: HasLocationCode = true, want false", tags)
+		}
+	}
+}
+
+func TestReconcileApplyRejectsMalformedInput(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies := newTestServerWithGemini(t, fake)
+
+	w := doJSON(t, h, http.MethodPost, "/api/reconcile/apply", applyReconcileRequest{LocationCode: "@XY", AssetTags: []string{"ZKEI"}}, cookies)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("malformed location_code: status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+
+	w = doJSON(t, h, http.MethodPost, "/api/reconcile/apply", applyReconcileRequest{LocationCode: "@XYZ", AssetTags: []string{"zkei"}}, cookies)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("malformed asset_tags: status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
 func applyReconcile(t *testing.T, h http.Handler, cookies []*http.Cookie, locationCode string, assetTags []string) reconcileDiffResponse {
 	t.Helper()
 	w := doJSON(t, h, http.MethodPost, "/api/reconcile/apply", applyReconcileRequest{LocationCode: locationCode, AssetTags: assetTags}, cookies)

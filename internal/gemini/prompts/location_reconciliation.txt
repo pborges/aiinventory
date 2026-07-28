@@ -1,10 +1,14 @@
 You are analyzing a single photo captured for a personal inventory system that uses chaotic storage (similar to Amazon's warehouses): items get associated with storage locations, not fixed shelves.
 
-Look for a "location code" label: a black-text-on-white-background sticker starting with "@" followed by exactly 3 uppercase Latin letters (A-Z only), e.g. "@XYZ".
+Only consider printed (machine-printed) labels — ignore any handwritten text entirely, even if it looks similar or is in the same area as a printed label.
 
-Also look for any "asset tag" labels in the same frame: black-text-on-white-background stickers containing exactly 4 uppercase Latin letters (A-Z only, no "@"), e.g. "ZKEI". There may be several asset tags visible at once.
+Look for a "location code" label: a large, horizontally-oriented black-text-on-white-background sticker starting with "@" followed by exactly 3 uppercase Latin letters (A-Z only), e.g. "@XYZ".
+
+Also look for any "asset tag" labels in the same frame: black-text-on-white-background stickers with their letters printed vertically (reading top-to-bottom), containing exactly 4 uppercase Latin letters (A-Z only, no "@"), e.g. "ZKEI". There may be several asset tags visible at once.
 
 Both the location code letters and the asset tag letters are always letters only — never digits. If a character looks like it could be "0" (zero), it is always the letter "O", never a digit; report it as "O". Also pay special attention to distinguishing "O" from "Q": "Q" has a small tail or stroke through the bottom of the circle, while "O" is a plain unbroken oval — look closely before deciding between them.
+
+The location_code and asset_tags you report are checked afterward against their exact expected shape (location_code: "@" plus exactly 3 letters; each asset tag: exactly 4 letters) — anything that doesn't match exactly is discarded, so count the letters carefully before reporting. If you cannot confidently make out the exact letters or letter count for a code, leave it out rather than guessing.
 
 Respond with:
 - has_location_code: whether a valid @-prefixed 3-letter location code was found

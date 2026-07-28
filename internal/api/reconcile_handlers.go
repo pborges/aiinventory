@@ -3,12 +3,20 @@ package api
 import (
 	"io"
 	"net/http"
+	"regexp"
 
 	"github.com/pborges/aiinventory/internal/auth"
 	"github.com/pborges/aiinventory/internal/domain"
 	"github.com/pborges/aiinventory/internal/gemini"
 	"github.com/pborges/aiinventory/internal/inventory"
 )
+
+// locationCodePattern mirrors assetTagPattern (capture_handlers.go): Gemini's
+// JSON schema only constrains these to strings, not their shape, so a
+// misread (extra/missing letter, a stray digit, lowercase, etc.) can slip
+// through as valid-looking JSON. Both flows need this deterministic check
+// before their result is trusted.
+var locationCodePattern = regexp.MustCompile(`^@[A-Z]{3}$`)
 
 type movedItemResponse struct {
 	AssetTag     string `json:"asset_tag"`
@@ -106,9 +114,20 @@ func (s *Server) handleReconcilePreview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if !analysis.HasLocationCode {
+	if !analysis.HasLocationCode || !locationCodePattern.MatchString(analysis.LocationCode) {
 		writeJSON(w, http.StatusOK, reconcileDiffResponse{HasLocationCode: false})
 		return
+	}
+	for _, tag := range analysis.AssetTags {
+		if !assetTagPattern.MatchString(tag) {
+			// Gemini read a well-formed location code but at least one
+			// asset tag failed the deterministic shape check — likely an
+			// OCR misread. Reject the whole preview rather than reconciling
+			// against a partially-garbled tag set, which could show real
+			// items as falsely "removed" from this location.
+			writeJSON(w, http.StatusOK, reconcileDiffResponse{HasLocationCode: false})
+			return
+		}
 	}
 
 	diff, err := inventory.ComputeReconciliation(ctx, s.store, analysis.LocationCode, analysis.AssetTags)
@@ -141,9 +160,15 @@ func (s *Server) handleReconcileApply(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.LocationCode == "" {
-		writeError(w, http.StatusBadRequest, "location_code is required")
+	if !locationCodePattern.MatchString(req.LocationCode) {
+		writeError(w, http.StatusBadRequest, `location_code must be "@" followed by exactly 3 uppercase letters`)
 		return
+	}
+	for _, tag := range req.AssetTags {
+		if !assetTagPattern.MatchString(tag) {
+			writeError(w, http.StatusBadRequest, "asset_tags must each be exactly 4 uppercase letters")
+			return
+		}
 	}
 
 	ctx := r.Context()
