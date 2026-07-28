@@ -146,39 +146,41 @@ export function Search(_props: RouteProps) {
             onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
             autoFocus
           />
-          <label class="search-filter">
-            <input
-              type="checkbox"
-              checked={noDescription}
-              onChange={(e) => setNoDescription((e.target as HTMLInputElement).checked)}
-            />
-            No description
-          </label>
-          <label class="search-filter">
-            <input
-              type="checkbox"
-              checked={noLocation}
-              onChange={(e) => setNoLocation((e.target as HTMLInputElement).checked)}
-            />
-            No location
-          </label>
-          <label class="search-filter">
-            <input
-              type="checkbox"
-              checked={noPhoto}
-              onChange={(e) => setNoPhoto((e.target as HTMLInputElement).checked)}
-            />
-            No photo
-          </label>
-          {locationFilter && (
-            <span class="search-location-chip">
-              <Icon icon={faLocationDot} />{' '}
-              {locationFilter.code ? formatLocationCode(locationFilter.code, locationFilter.description) : `location #${locationFilter.id}`}
-              <button type="button" class="link-button" onClick={() => setLocationFilter(null)} aria-label="Clear location filter">
-                <Icon icon={faXmark} />
-              </button>
-            </span>
-          )}
+          <div class="search-filter-row">
+            <label class="search-filter">
+              <input
+                type="checkbox"
+                checked={noDescription}
+                onChange={(e) => setNoDescription((e.target as HTMLInputElement).checked)}
+              />
+              No description
+            </label>
+            <label class="search-filter">
+              <input
+                type="checkbox"
+                checked={noLocation}
+                onChange={(e) => setNoLocation((e.target as HTMLInputElement).checked)}
+              />
+              No location
+            </label>
+            <label class="search-filter">
+              <input
+                type="checkbox"
+                checked={noPhoto}
+                onChange={(e) => setNoPhoto((e.target as HTMLInputElement).checked)}
+              />
+              No photo
+            </label>
+            {locationFilter && (
+              <span class="search-location-chip">
+                <Icon icon={faLocationDot} />{' '}
+                {locationFilter.code ? formatLocationCode(locationFilter.code, locationFilter.description) : `location #${locationFilter.id}`}
+                <button type="button" class="link-button" onClick={() => setLocationFilter(null)} aria-label="Clear location filter">
+                  <Icon icon={faXmark} />
+                </button>
+              </span>
+            )}
+          </div>
         </div>
 
         {(allLocationTags.length > 0 || allTags.length > 0) && (

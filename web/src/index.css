@@ -276,12 +276,15 @@ input[type='radio'] {
   padding: 1rem;
 }
 
+/* Mobile: search box gets its own full-width row, filter checkboxes wrap
+   onto a row below it. Desktop (see @media below) flattens this back into
+   the single wrapped row it used to be. */
 .search-controls {
   flex-shrink: 0;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
 }
 
 .search-input {
@@ -289,6 +292,13 @@ input[type='radio'] {
   min-width: 10rem;
   padding: 0.5rem;
   font-size: 1rem;
+}
+
+.search-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .search-filter {
@@ -410,6 +420,18 @@ input[type='radio'] {
     height: auto;
     min-height: 100dvh;
     overflow: visible;
+  }
+
+  .search-controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  /* collapses back into search-controls' own row, same as before the
+     mobile-only stacked layout was introduced */
+  .search-filter-row {
+    display: contents;
   }
 
   .search-body {
