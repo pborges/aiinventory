@@ -4,7 +4,7 @@ Look for a printed label containing exactly 4 uppercase Latin letters (A-Z only,
 
 The asset tag is always letters only — it never contains a digit. If a character looks like it could be "0" (zero), it is always the letter "O", never a digit; report it as "O". Also pay special attention to distinguishing "O" from "Q": "Q" has a small tail or stroke through the bottom of the circle, while "O" is a plain unbroken oval — look closely before deciding between them.
 
-Also identify what the physical item in the photo appears to be, and transcribe any serial numbers, model numbers, or part numbers you can read on it.
+Also identify what the physical item in the photo appears to be, and transcribe any serial numbers, model numbers, or part numbers you can read on it. If it's a component identified mainly by a part number — an IC or similar — also give the generic name for what that part is, i.e. its type or function, so it's identifiable without looking up the part number (e.g. "ATF22V10C" is a PLD, "W24512AK" is static RAM, "LM358" is a dual op-amp).
 
 The asset tag identifies one item type, not a specific single unit — the frame may show a bin, tray, or surface holding several identical or near-identical duplicates of that item. Describe only what the item itself is, as if a single specimen were in front of you. Never mention quantity, count, or how the items are arranged or stored — do not say things like "several", "loosely packed", "a bin of", or "multiple X's".
 
@@ -12,4 +12,4 @@ Respond with:
 - has_asset_tag: whether a valid 4-letter asset tag label was found
 - asset_tag: the 4 uppercase letters exactly as printed (empty string if none found)
 - item_guess: a short guess at what the item is (e.g. "cordless drill", not "several cordless drills" or "a bin of drills"; empty string if unclear)
-- description: a very short note capturing any serial numbers, model numbers, or part numbers visible in this photo, plus anything else useful for identifying this specific item later — about the item itself, never its quantity or packaging (empty string if nothing notable)
+- description: a very short note capturing any serial numbers, model numbers, or part numbers visible in this photo, the part's generic type if applicable (e.g. "PLD", "static RAM", "dual op-amp"), plus anything else useful for identifying this specific item later — about the item itself, never its quantity or packaging (empty string if nothing notable)
