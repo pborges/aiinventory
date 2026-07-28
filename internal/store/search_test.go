@@ -53,6 +53,34 @@ func TestSearchItemsFilters(t *testing.T) {
 	if len(byLoc) != 1 || byLoc[0].AssetTag != "XDKW" || byLoc[0].LocationCode != "@XYZ" {
 		t.Fatalf("LocationID results = %+v, want [XDKW @XYZ]", byLoc)
 	}
+
+	locTag, err := s.CreateLocationTag(ctx, "Garage", "#a6e22e")
+	if err != nil {
+		t.Fatalf("CreateLocationTag: %v", err)
+	}
+	if err := s.SetLocationTags(ctx, loc.ID, []int64{locTag.ID}); err != nil {
+		t.Fatalf("SetLocationTags: %v", err)
+	}
+
+	byLocTag, err := s.SearchItems(ctx, SearchParams{LocationTagIDs: []int64{locTag.ID}})
+	if err != nil {
+		t.Fatalf("SearchItems(LocationTagIDs): %v", err)
+	}
+	if len(byLocTag) != 1 || byLocTag[0].AssetTag != "XDKW" {
+		t.Fatalf("LocationTagIDs results = %+v, want [XDKW]", byLocTag)
+	}
+
+	otherLocTag, err := s.CreateLocationTag(ctx, "Attic", "#f92672")
+	if err != nil {
+		t.Fatalf("CreateLocationTag: %v", err)
+	}
+	byUnusedLocTag, err := s.SearchItems(ctx, SearchParams{LocationTagIDs: []int64{otherLocTag.ID}})
+	if err != nil {
+		t.Fatalf("SearchItems(LocationTagIDs unused): %v", err)
+	}
+	if len(byUnusedLocTag) != 0 {
+		t.Fatalf("LocationTagIDs(unused) results = %+v, want none", byUnusedLocTag)
+	}
 }
 
 func TestSearchItemsFullText(t *testing.T) {

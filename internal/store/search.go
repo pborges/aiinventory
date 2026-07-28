@@ -10,12 +10,13 @@ import (
 )
 
 type SearchParams struct {
-	Query         string // free-text FTS query; "" means no text search, filters only
-	NoDescription bool
-	NoLocation    bool
-	NoPhoto       bool
-	LocationID    *int64
-	TagIDs        []int64 // non-empty: item must have at least one of these tags (OR)
+	Query          string // free-text FTS query; "" means no text search, filters only
+	NoDescription  bool
+	NoLocation     bool
+	NoPhoto        bool
+	LocationID     *int64
+	TagIDs         []int64 // non-empty: item must have at least one of these tags (OR)
+	LocationTagIDs []int64 // non-empty: item's location must have at least one of these tags (OR)
 }
 
 // ItemSummary is one search result: enough to render a card (asset tag,
@@ -152,6 +153,14 @@ func buildFilterClause(params SearchParams, args *[]any) string {
 			*args = append(*args, tagID)
 		}
 		conds = append(conds, "EXISTS (SELECT 1 FROM item_tags WHERE item_tags.item_id = items.id AND item_tags.tag_id IN ("+strings.Join(placeholders, ",")+"))")
+	}
+	if len(params.LocationTagIDs) > 0 {
+		placeholders := make([]string, len(params.LocationTagIDs))
+		for i, tagID := range params.LocationTagIDs {
+			placeholders[i] = "?"
+			*args = append(*args, tagID)
+		}
+		conds = append(conds, "EXISTS (SELECT 1 FROM location_tag_links WHERE location_tag_links.location_id = items.location_id AND location_tag_links.tag_id IN ("+strings.Join(placeholders, ",")+"))")
 	}
 	if len(conds) == 0 {
 		return ""

@@ -52,6 +52,53 @@ func TestSearchAndImageServing(t *testing.T) {
 	}
 }
 
+func TestSearchByLocationTag(t *testing.T) {
+	fake := &gemini.Fake{TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"}}
+	h, cookies := newTestServerWithGemini(t, fake)
+
+	captureResp := doCaptureUpload(t, h, cookies, []byte("photo"))
+	var captured captureResponse
+	json.NewDecoder(captureResp.Body).Decode(&captured)
+
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationCode: true, LocationCode: "@XYZ", AssetTags: []string{"ZKEI"}}
+	applyReconcile(t, h, cookies, "@XYZ", []string{"ZKEI"})
+
+	locResp := doJSON(t, h, http.MethodGet, "/api/locations", nil, cookies)
+	var locBody struct {
+		Locations []locationResponse `json:"locations"`
+	}
+	json.NewDecoder(locResp.Body).Decode(&locBody)
+	loc := locBody.Locations[0]
+
+	createResp := doJSON(t, h, http.MethodPost, "/api/location-tags", tagRequest{Name: "warehouse", Color: "#a6e22e"}, cookies)
+	var createBody struct {
+		Tag tagResponse `json:"tag"`
+	}
+	json.NewDecoder(createResp.Body).Decode(&createBody)
+
+	locIDStr := strconv.FormatInt(loc.ID, 10)
+	doJSON(t, h, http.MethodPut, "/api/locations/"+locIDStr+"/tags", setLocationTagsRequest{TagIDs: []int64{createBody.Tag.ID}}, cookies)
+
+	tagIDStr := strconv.FormatInt(createBody.Tag.ID, 10)
+	matched := doJSON(t, h, http.MethodGet, "/api/search?location_tag_id="+tagIDStr, nil, cookies)
+	var matchedResp struct {
+		Items []itemSummaryResponse `json:"items"`
+	}
+	json.NewDecoder(matched.Body).Decode(&matchedResp)
+	if len(matchedResp.Items) != 1 || matchedResp.Items[0].AssetTag != "ZKEI" {
+		t.Fatalf("location_tag_id search results = %+v, want [ZKEI]", matchedResp.Items)
+	}
+
+	unmatched := doJSON(t, h, http.MethodGet, "/api/search?location_tag_id=999999", nil, cookies)
+	var unmatchedResp struct {
+		Items []itemSummaryResponse `json:"items"`
+	}
+	json.NewDecoder(unmatched.Body).Decode(&unmatchedResp)
+	if len(unmatchedResp.Items) != 0 {
+		t.Fatalf("location_tag_id search (unused tag) results = %+v, want none", unmatchedResp.Items)
+	}
+}
+
 func TestBulkDelete(t *testing.T) {
 	fake := &gemini.Fake{TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"}}
 	h, cookies := newTestServerWithGemini(t, fake)

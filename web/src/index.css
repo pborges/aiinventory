@@ -1604,6 +1604,30 @@ button.tag-chip:hover {
   flex-shrink: 0;
 }
 
+.search-tag-filters-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+}
+
+.search-tag-filters-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.search-tag-filters-label {
+  margin: 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
 .item-card-tags {
   display: flex;
   flex-wrap: wrap;

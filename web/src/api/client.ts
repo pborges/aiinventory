@@ -129,6 +129,7 @@ export interface SearchFilters {
   noPhoto?: boolean
   locationId?: number
   tagIds?: number[]
+  locationTagIds?: number[]
 }
 
 export interface ItemImage {
@@ -235,6 +236,7 @@ export const api = {
     if (filters.noPhoto) params.set('no_photo', '1')
     if (filters.locationId != null) params.set('location_id', String(filters.locationId))
     for (const tagId of filters.tagIds ?? []) params.append('tag_id', String(tagId))
+    for (const tagId of filters.locationTagIds ?? []) params.append('location_tag_id', String(tagId))
     const qs = params.toString()
     return request<{ items: ItemSummary[] }>('GET', '/api/search' + (qs ? `?${qs}` : ''))
   },

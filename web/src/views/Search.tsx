@@ -32,6 +32,8 @@ export function Search(_props: RouteProps) {
   const [locationFilter, setLocationFilter] = useState(() => parseLocationFilterFromURL())
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set())
+  const [allLocationTags, setAllLocationTags] = useState<Tag[]>([])
+  const [selectedLocationTagIds, setSelectedLocationTagIds] = useState<Set<number>>(new Set())
   const [items, setItems] = useState<ItemSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -53,6 +55,7 @@ export function Search(_props: RouteProps) {
         noPhoto,
         locationId: locationFilter?.id,
         tagIds: selectedTagIds.size > 0 ? [...selectedTagIds] : undefined,
+        locationTagIds: selectedLocationTagIds.size > 0 ? [...selectedLocationTagIds] : undefined,
       })
       .then((res) => {
         setItems(res.items)
@@ -64,6 +67,7 @@ export function Search(_props: RouteProps) {
 
   useEffect(() => {
     api.listTags().then((res) => setAllTags(res.tags))
+    api.listLocationTags().then((res) => setAllLocationTags(res.tags))
   }, [])
 
   useEffect(() => {
@@ -73,10 +77,19 @@ export function Search(_props: RouteProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, noDescription, noLocation, noPhoto, locationFilter, selectedTagIds])
+  }, [query, noDescription, noLocation, noPhoto, locationFilter, selectedTagIds, selectedLocationTagIds])
 
   function toggleTagFilter(tagId: number) {
     setSelectedTagIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(tagId)) next.delete(tagId)
+      else next.add(tagId)
+      return next
+    })
+  }
+
+  function toggleLocationTagFilter(tagId: number) {
+    setSelectedLocationTagIds((prev) => {
       const next = new Set(prev)
       if (next.has(tagId)) next.delete(tagId)
       else next.add(tagId)
@@ -168,11 +181,33 @@ export function Search(_props: RouteProps) {
           )}
         </div>
 
-        {allTags.length > 0 && (
-          <div class="tag-cloud search-tag-filter">
-            {allTags.map((tag) => (
-              <TagChip key={tag.id} tag={tag} selected={selectedTagIds.has(tag.id)} onClick={() => toggleTagFilter(tag.id)} />
-            ))}
+        {(allLocationTags.length > 0 || allTags.length > 0) && (
+          <div class="search-tag-filters-card">
+            {allLocationTags.length > 0 && (
+              <div class="search-tag-filters-section">
+                <h3 class="search-tag-filters-label">Location tags</h3>
+                <div class="tag-cloud search-tag-filter">
+                  {allLocationTags.map((tag) => (
+                    <TagChip
+                      key={tag.id}
+                      tag={tag}
+                      selected={selectedLocationTagIds.has(tag.id)}
+                      onClick={() => toggleLocationTagFilter(tag.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            {allTags.length > 0 && (
+              <div class="search-tag-filters-section">
+                <h3 class="search-tag-filters-label">Item tags</h3>
+                <div class="tag-cloud search-tag-filter">
+                  {allTags.map((tag) => (
+                    <TagChip key={tag.id} tag={tag} selected={selectedTagIds.has(tag.id)} onClick={() => toggleTagFilter(tag.id)} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

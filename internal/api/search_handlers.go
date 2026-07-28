@@ -45,6 +45,14 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		params.TagIDs = append(params.TagIDs, id)
 	}
+	for _, v := range q["location_tag_id"] {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid location_tag_id")
+			return
+		}
+		params.LocationTagIDs = append(params.LocationTagIDs, id)
+	}
 
 	results, err := s.store.SearchItems(r.Context(), params)
 	if err != nil {
