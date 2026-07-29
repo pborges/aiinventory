@@ -17,7 +17,7 @@ func newTestServerWithGemini(t *testing.T, g gemini.Client) (http.Handler, []*ht
 	t.Helper()
 	s := store.NewTestStore(t)
 	codec := auth.NewCodec("test-secret")
-	h := New(s, codec, g)
+	h := New(s, codec, g, "")
 	w := doJSON(t, h, http.MethodPost, "/api/auth/bootstrap", credentials{Username: "alice", Password: "correcthorse"}, nil)
 	return h, w.Result().Cookies()
 }

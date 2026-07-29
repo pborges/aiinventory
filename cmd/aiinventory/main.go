@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/pborges/aiinventory/internal/api"
 	"github.com/pborges/aiinventory/internal/auth"
@@ -53,7 +54,14 @@ func main() {
 		geminiClient = gc
 	}
 
-	handler := api.New(db, codec, geminiClient)
+	if cfg.ScanStoreDir != "" {
+		if err := os.MkdirAll(cfg.ScanStoreDir, 0o755); err != nil {
+			log.Fatalf("create scan store directory %s: %v", cfg.ScanStoreDir, err)
+		}
+		log.Printf("saving scan images into %s", cfg.ScanStoreDir)
+	}
+
+	handler := api.New(db, codec, geminiClient, cfg.ScanStoreDir)
 
 	if !cfg.TLSEnabled {
 		log.Printf("aiinventory listening on :%s", cfg.Port)

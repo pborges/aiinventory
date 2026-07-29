@@ -90,6 +90,12 @@ func (s *Server) handleCapturePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var foundTags []string
+	if analysis.HasAssetTag && analysis.AssetTag != "" {
+		foundTags = append(foundTags, analysis.AssetTag)
+	}
+	s.saveScan("item", data, foundTags)
+
 	if !analysis.HasAssetTag || !assetTagPattern.MatchString(analysis.AssetTag) {
 		// A misread (wrong letter count, stray digit, lowercase, etc.) can
 		// still come back as "valid" JSON from Gemini's schema — the

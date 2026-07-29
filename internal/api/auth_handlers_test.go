@@ -15,7 +15,7 @@ func newTestServer(t *testing.T) (http.Handler, *store.Store) {
 	t.Helper()
 	s := store.NewTestStore(t)
 	codec := auth.NewCodec("test-secret")
-	return New(s, codec, nil), s
+	return New(s, codec, nil, ""), s
 }
 
 func doJSON(t *testing.T, h http.Handler, method, path string, body any, cookies []*http.Cookie) *httptest.ResponseRecorder {

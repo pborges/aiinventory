@@ -114,6 +114,13 @@ func (s *Server) handleReconcilePreview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	var found []string
+	if analysis.HasLocationCode && analysis.LocationCode != "" {
+		found = append(found, analysis.LocationCode)
+	}
+	found = append(found, analysis.AssetTags...)
+	s.saveScan("locate", data, found)
+
 	if !analysis.HasLocationCode || !locationCodePattern.MatchString(analysis.LocationCode) {
 		writeJSON(w, http.StatusOK, reconcileDiffResponse{HasLocationCode: false})
 		return

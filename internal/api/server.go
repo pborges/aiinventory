@@ -19,19 +19,22 @@ type Server struct {
 	geminiMu        sync.RWMutex
 	gemini          gemini.Client // nil if no Gemini API key is configured (Settings) — AI-dependent routes handle that
 	duplicateRunner *inventory.Runner
+	scanStoreDir    string // empty disables saving scan images — see saveScan
 }
 
 // New assembles the HTTP handler. geminiClient may be nil if no Gemini API
 // key was configured yet; routes that need it (capture, reconcile,
 // description regeneration, duplicate detection) are responsible for
 // returning a clear error when it's nil. The Settings page can swap it out
-// for a new client at runtime — see setGeminiClient.
-func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client) http.Handler {
+// for a new client at runtime — see setGeminiClient. scanStoreDir may be
+// empty (the common case) to disable saving scan images entirely.
+func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStoreDir string) http.Handler {
 	srv := &Server{
 		store:           s,
 		codec:           codec,
 		gemini:          geminiClient,
 		duplicateRunner: &inventory.Runner{},
+		scanStoreDir:    scanStoreDir,
 	}
 
 	mux := http.NewServeMux()
