@@ -8,7 +8,7 @@ import (
 )
 
 func TestUserManagementFlow(t *testing.T) {
-	h, cookies := newTestServerWithGemini(t, nil)
+	h, cookies, _ := newTestServerWithGemini(t, nil)
 
 	// only alice (the bootstrap account) exists so far
 	listResp := doJSON(t, h, http.MethodGet, "/api/users", nil, cookies)
@@ -76,7 +76,7 @@ func TestUserManagementFlow(t *testing.T) {
 }
 
 func TestUserManagementRequiresAuth(t *testing.T) {
-	h, _ := newTestServerWithGemini(t, nil)
+	h, _, _ := newTestServerWithGemini(t, nil)
 	w := doJSON(t, h, http.MethodGet, "/api/users", nil, nil)
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", w.Code)

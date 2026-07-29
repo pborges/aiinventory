@@ -27,7 +27,7 @@ func waitForDuplicateRunDone(t *testing.T, h http.Handler, cookies []*http.Cooki
 
 func TestDuplicateFinderFullFlow(t *testing.T) {
 	fake := &gemini.Fake{TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true}}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	fake.TagCaptureResult.AssetTag = "ZKEI"
 	zkei := doCaptureUpload(t, h, cookies, []byte("zkei"))
@@ -85,7 +85,7 @@ func TestDuplicateFinderFullFlow(t *testing.T) {
 
 func TestDuplicateFinderMergeViaAPI(t *testing.T) {
 	fake := &gemini.Fake{}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	fake.TagCaptureResult = gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"}
 	zkei := doCaptureUpload(t, h, cookies, []byte("zkei"))

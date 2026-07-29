@@ -12,18 +12,18 @@ import (
 )
 
 type locationResponse struct {
-	ID          int64         `json:"id"`
-	Code        string        `json:"code"`
-	Description string        `json:"description,omitempty"`
-	Tags        []tagResponse `json:"tags"`
+	ID          int64           `json:"id"`
+	LocationTag string          `json:"location_tag"`
+	Description string          `json:"description,omitempty"`
+	Labels      []labelResponse `json:"labels"`
 }
 
-func toLocationResponse(loc domain.Location, tags []domain.Tag) locationResponse {
-	return locationResponse{ID: loc.ID, Code: loc.Code, Description: loc.Description, Tags: toTagResponses(tags)}
+func toLocationResponse(loc domain.Location, labels []domain.Label) locationResponse {
+	return locationResponse{ID: loc.ID, LocationTag: loc.LocationTag, Description: loc.Description, Labels: toLabelResponses(labels)}
 }
 
 // handleListLocations powers the location view's sidebar (README flow #4),
-// including each location's tags so the sidebar's filter tag cloud can
+// including each location's labels so the sidebar's filter label cloud can
 // narrow the list client-side without a round trip per filter change.
 func (s *Server) handleListLocations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -36,14 +36,14 @@ func (s *Server) handleListLocations(w http.ResponseWriter, r *http.Request) {
 	for i, loc := range locations {
 		ids[i] = loc.ID
 	}
-	tagsByLocation, err := s.store.ListTagsForLocations(ctx, ids)
+	labelsByLocation, err := s.store.ListLabelsForLocations(ctx, ids)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	out := make([]locationResponse, 0, len(locations))
 	for _, loc := range locations {
-		out = append(out, toLocationResponse(loc, tagsByLocation[loc.ID]))
+		out = append(out, toLocationResponse(loc, labelsByLocation[loc.ID]))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"locations": out})
 }
@@ -53,7 +53,7 @@ type updateLocationRequest struct {
 }
 
 // handleUpdateLocation sets (or clears) a location's optional description —
-// the locations view's under-the-code editor for the selected location.
+// the locations view's under-the-tag editor for the selected location.
 func (s *Server) handleUpdateLocation(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -81,22 +81,22 @@ func (s *Server) handleUpdateLocation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	tags, err := s.store.ListTagsByLocation(ctx, id)
+	labels, err := s.store.ListLabelsByLocation(ctx, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]locationResponse{"location": toLocationResponse(loc, tags)})
+	writeJSON(w, http.StatusOK, map[string]locationResponse{"location": toLocationResponse(loc, labels)})
 }
 
-type setLocationTagsRequest struct {
-	TagIDs []int64 `json:"tag_ids"`
+type setLocationLabelsRequest struct {
+	LabelIDs []int64 `json:"label_ids"`
 }
 
-// handleSetLocationTags replaces a location's full set of (location-pool)
-// tags — the locations view's tag toggle-cloud sends the whole desired set
-// on every click, same as handleSetItemTags does for items.
-func (s *Server) handleSetLocationTags(w http.ResponseWriter, r *http.Request) {
+// handleSetLocationLabels replaces a location's full set of (location-pool)
+// labels — the locations view's label toggle-cloud sends the whole desired
+// set on every click, same as handleSetItemLabels does for items.
+func (s *Server) handleSetLocationLabels(w http.ResponseWriter, r *http.Request) {
 	user, ok := auth.CurrentUser(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
@@ -107,18 +107,18 @@ func (s *Server) handleSetLocationTags(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid location id")
 		return
 	}
-	var req setLocationTagsRequest
+	var req setLocationLabelsRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	ctx := r.Context()
-	if err := s.store.SetLocationTags(ctx, id, req.TagIDs); err != nil {
+	if err := s.store.SetLocationLabels(ctx, id, req.LabelIDs); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if err := s.store.LogActivity(ctx, user.ID, domain.ActivityLocationTagsUpdated, nil, &id, ""); err != nil {
+	if err := s.store.LogActivity(ctx, user.ID, domain.ActivityLocationLabelsUpdated, nil, &id, ""); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -132,12 +132,12 @@ func (s *Server) handleSetLocationTags(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	tags, err := s.store.ListTagsByLocation(ctx, id)
+	labels, err := s.store.ListLabelsByLocation(ctx, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]locationResponse{"location": toLocationResponse(loc, tags)})
+	writeJSON(w, http.StatusOK, map[string]locationResponse{"location": toLocationResponse(loc, labels)})
 }
 
 type locationItemResponse struct {

@@ -68,6 +68,7 @@ export interface Settings {
   prompts: Record<string, PromptSetting>
 }
 
+
 export interface SettingsUpdate {
   gemini_api_key?: string
   gemini_model?: string
@@ -86,6 +87,10 @@ export interface CaptureResponse {
 export interface CapturePreviewResponse {
   has_asset_tag: boolean
   asset_tag?: string
+  raw_asset_tag?: string
+  corrected?: boolean
+  needs_resolution?: boolean
+  candidates?: string[]
   item_guess?: string
   image_description?: string
   item_will_be_new?: boolean
@@ -96,9 +101,27 @@ export interface MovedItem {
   from_location?: string
 }
 
+export interface TagResolution {
+  raw: string
+  status: 'exact' | 'corrected' | 'ambiguous' | 'no_match'
+  candidates?: string[]
+}
+
 export interface ReconcileDiffResponse {
-  has_location_code: boolean
-  location_code?: string
+  has_location_tag: boolean
+  location_tag?: string
+  // Only set on preview responses — what Gemini actually read, alongside
+  // has_location_tag. The deterministic registry check runs on top of this.
+  raw_location_tag?: string
+  // True when there's a single, confident distance-1 registry candidate for
+  // raw_location_tag — never auto-applied, only a pre-selected suggestion
+  // (location_tag_candidates[0]) the operator must still confirm.
+  location_tag_corrected?: boolean
+  // True whenever the read isn't an exact registry match. The diff above is
+  // still computed against the raw read, so there's something to show while
+  // the operator resolves it.
+  location_tag_needs_resolution?: boolean
+  location_tag_candidates?: string[]
   asset_tags: string[]
   new: string[]
   added: string[]
@@ -108,9 +131,12 @@ export interface ReconcileDiffResponse {
   // dual-read cross-check — which way to rotate the same frame for the
   // second, corroborating read.
   suggested_rotation?: 'clockwise' | 'counterclockwise'
+  // Only set on preview responses — one entry per raw tag Gemini read
+  // (before shape-invalid ones are rejected outright).
+  tag_resolutions?: TagResolution[]
 }
 
-export interface Tag {
+export interface Label {
   id: number
   name: string
   color: string
@@ -120,10 +146,10 @@ export interface ItemSummary {
   id: number
   asset_tag: string
   description: string
-  location_code?: string
+  location_tag?: string
   location_description?: string
   primary_image_id?: number
-  tags: Tag[]
+  labels: Label[]
 }
 
 export interface SearchFilters {
@@ -132,8 +158,8 @@ export interface SearchFilters {
   noLocation?: boolean
   noPhoto?: boolean
   locationId?: number
-  tagIds?: number[]
-  locationTagIds?: number[]
+  labelIds?: number[]
+  locationLabelIds?: number[]
 }
 
 export interface ItemImage {
@@ -154,25 +180,25 @@ export interface ItemDetail {
   asset_tag: string
   description: string
   location_id?: number
-  location_code?: string
+  location_tag?: string
   location_description?: string
   images: ItemImage[]
   activity: ActivityEntry[]
-  tags: Tag[]
+  labels: Label[]
 }
 
 export interface Location {
   id: number
-  code: string
+  location_tag: string
   description?: string
-  tags: Tag[]
+  labels: Label[]
 }
 
-// formatLocationCode renders a location's code with its optional description
+// formatLocationTag renders a location's tag with its optional description
 // appended, e.g. "@XYZ (Break room shelf)" — the "@XYZ (description)" shape
-// used everywhere a location code is displayed.
-export function formatLocationCode(code: string, description?: string): string {
-  return description ? `${code} (${description})` : code
+// used everywhere a location tag is displayed.
+export function formatLocationTag(locationTag: string, description?: string): string {
+  return description ? `${locationTag} (${description})` : locationTag
 }
 
 export interface LocationItem {
@@ -197,6 +223,20 @@ export interface DuplicateGroup {
   items: DuplicateGroupMember[]
   reasoning: string
   created_at: string
+}
+
+// RegisteredTagEntry is one row in the asset-tag or location-tag allow-list
+// registry — the Settings registry section's list view. Create/bulk-create/
+// list/delete only; entries are never edited.
+export interface RegisteredTagEntry {
+  id: number
+  tag: string
+  created_at: string
+}
+
+export interface UploadRegisteredTagsResponse {
+  added: number
+  skipped: number
 }
 
 export const api = {
@@ -227,14 +267,14 @@ export const api = {
     form.set('image', image, 'capture.jpg')
     return upload<ReconcileDiffResponse>('/api/reconcile/preview', form)
   },
-  reconcileDiff: (locationCode: string, assetTags: string[]) =>
+  reconcileDiff: (locationTag: string, assetTags: string[]) =>
     request<ReconcileDiffResponse>('POST', '/api/reconcile/diff', {
-      location_code: locationCode,
+      location_tag: locationTag,
       asset_tags: assetTags,
     }),
-  reconcileApply: (locationCode: string, assetTags: string[]) =>
+  reconcileApply: (locationTag: string, assetTags: string[]) =>
     request<ReconcileDiffResponse>('POST', '/api/reconcile/apply', {
-      location_code: locationCode,
+      location_tag: locationTag,
       asset_tags: assetTags,
     }),
   search: (filters: SearchFilters) => {
@@ -244,8 +284,8 @@ export const api = {
     if (filters.noLocation) params.set('no_location', '1')
     if (filters.noPhoto) params.set('no_photo', '1')
     if (filters.locationId != null) params.set('location_id', String(filters.locationId))
-    for (const tagId of filters.tagIds ?? []) params.append('tag_id', String(tagId))
-    for (const tagId of filters.locationTagIds ?? []) params.append('location_tag_id', String(tagId))
+    for (const labelId of filters.labelIds ?? []) params.append('label_id', String(labelId))
+    for (const labelId of filters.locationLabelIds ?? []) params.append('location_label_id', String(labelId))
     const qs = params.toString()
     return request<{ items: ItemSummary[] }>('GET', '/api/search' + (qs ? `?${qs}` : ''))
   },
@@ -266,8 +306,8 @@ export const api = {
   getLocationActivity: (id: number) => request<{ activity: ActivityEntry[] }>('GET', `/api/locations/${id}/activity`),
   moveItemToLocation: (locationId: number, itemId: number) =>
     request<{ item_id: number; location_id: number }>('POST', `/api/locations/${locationId}/move-item`, { item_id: itemId }),
-  setLocationTags: (locationId: number, tagIds: number[]) =>
-    request<{ location: Location }>('PUT', `/api/locations/${locationId}/tags`, { tag_ids: tagIds }),
+  setLocationLabels: (locationId: number, labelIds: number[]) =>
+    request<{ location: Location }>('PUT', `/api/locations/${locationId}/labels`, { label_ids: labelIds }),
   duplicatesStatus: () => request<DuplicateStatus>('GET', '/api/duplicates/status'),
   startDuplicateRun: () => request<void>('POST', '/api/duplicates/run'),
   listDuplicateGroups: () => request<{ groups: DuplicateGroup[] }>('GET', '/api/duplicates/groups'),
@@ -281,16 +321,32 @@ export const api = {
   createUser: (username: string, password: string) =>
     request<{ user: User }>('POST', '/api/users', { username, password }),
   setUserEnabled: (id: number, enabled: boolean) => request<void>('PUT', `/api/users/${id}`, { enabled }),
-  listTags: () => request<{ tags: Tag[] }>('GET', '/api/tags'),
-  createTag: (name: string, color: string) => request<{ tag: Tag }>('POST', '/api/tags', { name, color }),
-  updateTag: (id: number, name: string, color: string) =>
-    request<{ tag: Tag }>('PUT', `/api/tags/${id}`, { name, color }),
-  deleteTag: (id: number) => request<void>('DELETE', `/api/tags/${id}`),
-  setItemTags: (itemId: number, tagIds: number[]) =>
-    request<ItemDetail>('PUT', `/api/items/${itemId}/tags`, { tag_ids: tagIds }),
-  listLocationTags: () => request<{ tags: Tag[] }>('GET', '/api/location-tags'),
-  createLocationTag: (name: string, color: string) => request<{ tag: Tag }>('POST', '/api/location-tags', { name, color }),
-  updateLocationTag: (id: number, name: string, color: string) =>
-    request<{ tag: Tag }>('PUT', `/api/location-tags/${id}`, { name, color }),
-  deleteLocationTag: (id: number) => request<void>('DELETE', `/api/location-tags/${id}`),
+  listItemLabels: () => request<{ labels: Label[] }>('GET', '/api/labels'),
+  createItemLabel: (name: string, color: string) => request<{ label: Label }>('POST', '/api/labels', { name, color }),
+  updateItemLabel: (id: number, name: string, color: string) =>
+    request<{ label: Label }>('PUT', `/api/labels/${id}`, { name, color }),
+  deleteItemLabel: (id: number) => request<void>('DELETE', `/api/labels/${id}`),
+  setItemLabels: (itemId: number, labelIds: number[]) =>
+    request<ItemDetail>('PUT', `/api/items/${itemId}/labels`, { label_ids: labelIds }),
+  listLocationLabels: () => request<{ labels: Label[] }>('GET', '/api/location-labels'),
+  createLocationLabel: (name: string, color: string) => request<{ label: Label }>('POST', '/api/location-labels', { name, color }),
+  updateLocationLabel: (id: number, name: string, color: string) =>
+    request<{ label: Label }>('PUT', `/api/location-labels/${id}`, { name, color }),
+  deleteLocationLabel: (id: number) => request<void>('DELETE', `/api/location-labels/${id}`),
+  listRegisteredAssetTags: () => request<{ tags: RegisteredTagEntry[] }>('GET', '/api/tags'),
+  createRegisteredAssetTag: (tag: string) => request<{ tag: RegisteredTagEntry }>('POST', '/api/tags', { tag }),
+  deleteRegisteredAssetTag: (id: number) => request<void>('DELETE', `/api/tags/${id}`),
+  uploadRegisteredAssetTags: (file: File) => {
+    const form = new FormData()
+    form.set('file', file)
+    return upload<UploadRegisteredTagsResponse>('/api/tags/upload', form)
+  },
+  listRegisteredLocationTags: () => request<{ tags: RegisteredTagEntry[] }>('GET', '/api/location-tags'),
+  createRegisteredLocationTag: (tag: string) => request<{ tag: RegisteredTagEntry }>('POST', '/api/location-tags', { tag }),
+  deleteRegisteredLocationTag: (id: number) => request<void>('DELETE', `/api/location-tags/${id}`),
+  uploadRegisteredLocationTags: (file: File) => {
+    const form = new FormData()
+    form.set('file', file)
+    return upload<UploadRegisteredTagsResponse>('/api/location-tags/upload', form)
+  },
 }

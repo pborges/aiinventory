@@ -49,8 +49,8 @@ func TestMoveItemToLocation(t *testing.T) {
 			10: {ID: 10, AssetTag: "ZKEI", LocationID: &oldLocID},
 		},
 		locations: map[int64]domain.Location{
-			1: {ID: 1, Code: "@QRS"},
-			2: {ID: 2, Code: "@XYZ"},
+			1: {ID: 1, LocationTag: "@QRS"},
+			2: {ID: 2, LocationTag: "@XYZ"},
 		},
 	}
 
@@ -69,7 +69,7 @@ func TestMoveItemToLocation(t *testing.T) {
 func TestMoveItemToLocationFromUnlinked(t *testing.T) {
 	f := &fakeMoveItemStore{
 		items:     map[int64]domain.Item{10: {ID: 10, AssetTag: "ZKEI"}},
-		locations: map[int64]domain.Location{2: {ID: 2, Code: "@XYZ"}},
+		locations: map[int64]domain.Location{2: {ID: 2, LocationTag: "@XYZ"}},
 	}
 
 	updated, err := MoveItemToLocation(context.Background(), f, 42, 10, 2)

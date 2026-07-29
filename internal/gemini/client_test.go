@@ -16,11 +16,11 @@ func TestParseJSONResponseTagCapture(t *testing.T) {
 
 func TestParseJSONResponseReconciliation(t *testing.T) {
 	var out ReconciliationResult
-	err := parseJSONResponse(`{"has_location_code":true,"location_code":"@XYZ","asset_tags":["ZKEI","GKEI"]}`, &out)
+	err := parseJSONResponse(`{"has_location_tag":true,"location_tag":"@XYZ","asset_tags":["ZKEI","GKEI"]}`, &out)
 	if err != nil {
 		t.Fatalf("parseJSONResponse: %v", err)
 	}
-	if !out.HasLocationCode || out.LocationCode != "@XYZ" || len(out.AssetTags) != 2 {
+	if !out.HasLocationTag || out.LocationTag != "@XYZ" || len(out.AssetTags) != 2 {
 		t.Errorf("got %+v", out)
 	}
 }

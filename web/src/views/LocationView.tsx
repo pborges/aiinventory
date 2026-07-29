@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'preact/hooks'
-import { api, ApiError, formatLocationCode, type ActivityEntry, type Location, type LocationItem, type Tag } from '../api/client'
+import { api, ApiError, formatLocationTag, type ActivityEntry, type Location, type LocationItem, type Label } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
-import { TagChip } from '../components/TagChip'
+import { LabelChip } from '../components/LabelChip'
 import { HoverPreview, useHoverPreview } from '../lib/hoverPreview'
 
 interface RouteProps {
@@ -27,9 +27,9 @@ export function LocationView(_props: RouteProps) {
   const [dragOverId, setDragOverId] = useState<number | null>(null)
   const [descriptionInput, setDescriptionInput] = useState('')
   const [savingDescription, setSavingDescription] = useState(false)
-  const [allLocationTags, setAllLocationTags] = useState<Tag[]>([])
-  const [selectedTagFilterIds, setSelectedTagFilterIds] = useState<Set<number>>(new Set())
-  const [tagsBusy, setTagsBusy] = useState(false)
+  const [allLocationLabels, setAllLocationLabels] = useState<Label[]>([])
+  const [selectedLabelFilterIds, setSelectedLabelFilterIds] = useState<Set<number>>(new Set())
+  const [labelsBusy, setLabelsBusy] = useState(false)
   const { preview: hoverPreview, showHoverPreview, hideHoverPreview } = useHoverPreview()
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export function LocationView(_props: RouteProps) {
         setError(err instanceof ApiError ? err.message : 'Failed to load locations')
         setLoading(false)
       })
-    api.listLocationTags().then((res) => setAllLocationTags(res.tags))
+    api.listLocationLabels().then((res) => setAllLocationLabels(res.labels))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -77,34 +77,34 @@ export function LocationView(_props: RouteProps) {
     }
   }
 
-  function toggleTagFilter(tagId: number) {
-    setSelectedTagFilterIds((prev) => {
+  function toggleLabelFilter(labelId: number) {
+    setSelectedLabelFilterIds((prev) => {
       const next = new Set(prev)
-      if (next.has(tagId)) next.delete(tagId)
-      else next.add(tagId)
+      if (next.has(labelId)) next.delete(labelId)
+      else next.add(labelId)
       return next
     })
   }
 
-  async function onToggleLocationTag(tag: Tag) {
+  async function onToggleLocationLabel(label: Label) {
     if (!selected) return
-    const current = new Set(selected.tags.map((t) => t.id))
-    if (current.has(tag.id)) current.delete(tag.id)
-    else current.add(tag.id)
+    const current = new Set(selected.labels.map((l) => l.id))
+    if (current.has(label.id)) current.delete(label.id)
+    else current.add(label.id)
     const nextIds = [...current]
 
     // optimistic toggle, then persist
-    setSelected({ ...selected, tags: allLocationTags.filter((t) => current.has(t.id)) })
-    setTagsBusy(true)
+    setSelected({ ...selected, labels: allLocationLabels.filter((l) => current.has(l.id)) })
+    setLabelsBusy(true)
     try {
-      const { location } = await api.setLocationTags(selected.id, nextIds)
+      const { location } = await api.setLocationLabels(selected.id, nextIds)
       setSelected(location)
       setLocations((prev) => prev.map((loc) => (loc.id === location.id ? location : loc)))
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to update tags')
+      setError(err instanceof ApiError ? err.message : 'Failed to update labels')
       selectLocation(selected)
     } finally {
-      setTagsBusy(false)
+      setLabelsBusy(false)
     }
   }
 
@@ -122,25 +122,25 @@ export function LocationView(_props: RouteProps) {
   }
 
   const visibleLocations =
-    selectedTagFilterIds.size === 0
+    selectedLabelFilterIds.size === 0
       ? locations
-      : locations.filter((loc) => loc.tags.some((t) => selectedTagFilterIds.has(t.id)))
+      : locations.filter((loc) => loc.labels.some((l) => selectedLabelFilterIds.has(l.id)))
 
   return (
     <div class="location-view">
       <Header active="locations" />
 
-      <div class="location-layout">
-        <aside class="location-sidebar">
+      <div class="sidebar-page-layout">
+        <aside class="sidebar-page-sidebar">
           <h2>Locations</h2>
-          {allLocationTags.length > 0 && (
-            <div class="tag-cloud location-sidebar-tag-filter">
-              {allLocationTags.map((tag) => (
-                <TagChip
-                  key={tag.id}
-                  tag={tag}
-                  selected={selectedTagFilterIds.has(tag.id)}
-                  onClick={() => toggleTagFilter(tag.id)}
+          {allLocationLabels.length > 0 && (
+            <div class="label-cloud location-sidebar-label-filter">
+              {allLocationLabels.map((label) => (
+                <LabelChip
+                  key={label.id}
+                  label={label}
+                  selected={selectedLabelFilterIds.has(label.id)}
+                  onClick={() => toggleLabelFilter(label.id)}
                 />
               ))}
             </div>
@@ -162,7 +162,7 @@ export function LocationView(_props: RouteProps) {
                 onDragLeave={() => setDragOverId(null)}
                 onDrop={(e) => onDropOnLocation(loc, e)}
               >
-                <div class="location-sidebar-code">{loc.code}</div>
+                <div class="location-sidebar-tag">{loc.location_tag}</div>
                 {loc.description && <div class="location-sidebar-desc">{loc.description}</div>}
               </li>
             ))}
@@ -174,12 +174,12 @@ export function LocationView(_props: RouteProps) {
           </ul>
         </aside>
 
-        <main class="location-main">
+        <main class="sidebar-page-main">
           {error && <p class="capture-feedback capture-feedback-error">{error}</p>}
           {loading && <p>Loading…</p>}
           {!loading && selected && (
             <>
-              <h1>{selected.code}</h1>
+              <h1>{selected.location_tag}</h1>
               <div class="location-description-editor">
                 <label for="location-description-field">Description</label>
                 <input
@@ -193,16 +193,16 @@ export function LocationView(_props: RouteProps) {
                   {savingDescription ? 'Saving…' : 'Save'}
                 </button>
               </div>
-              <div class="tag-cloud location-tags-editor">
-                {allLocationTags.length === 0 && (
-                  <p class="location-tags-empty">No location tags yet — create some in Settings.</p>
+              <div class="label-cloud location-labels-editor">
+                {allLocationLabels.length === 0 && (
+                  <p class="location-labels-empty">No location labels yet — create some in Settings.</p>
                 )}
-                {allLocationTags.map((tag) => (
-                  <TagChip
-                    key={tag.id}
-                    tag={tag}
-                    selected={selected.tags.some((t) => t.id === tag.id)}
-                    onClick={() => !tagsBusy && onToggleLocationTag(tag)}
+                {allLocationLabels.map((label) => (
+                  <LabelChip
+                    key={label.id}
+                    label={label}
+                    selected={selected.labels.some((l) => l.id === label.id)}
+                    onClick={() => !labelsBusy && onToggleLocationLabel(label)}
                   />
                 ))}
               </div>
@@ -242,7 +242,7 @@ export function LocationView(_props: RouteProps) {
 
       {selected && (
         <footer class="location-activity-footer">
-          <h3>Activity — {formatLocationCode(selected.code, selected.description)}</h3>
+          <h3>Activity — {formatLocationTag(selected.location_tag, selected.description)}</h3>
           <ul class="activity-log">
             {activity.length === 0 && <li>No activity yet.</li>}
             {activity.map((a, i) => (

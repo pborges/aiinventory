@@ -10,21 +10,25 @@ import (
 	"github.com/pborges/aiinventory/internal/domain"
 )
 
-func (s *Store) GetLocationByCode(ctx context.Context, code string) (domain.Location, error) {
+func (s *Store) GetLocationByLocationTag(ctx context.Context, locationTag string) (domain.Location, error) {
 	return s.scanLocation(s.db.QueryRowContext(ctx, `
-		SELECT id, code, description, created_at, created_by FROM locations WHERE code = ?`, code))
+		SELECT id, location_tag, description, created_at, created_by FROM locations WHERE location_tag = ?`, locationTag))
 }
 
 func (s *Store) GetLocationByID(ctx context.Context, id int64) (domain.Location, error) {
 	return s.scanLocation(s.db.QueryRowContext(ctx, `
-		SELECT id, code, description, created_at, created_by FROM locations WHERE id = ?`, id))
+		SELECT id, location_tag, description, created_at, created_by FROM locations WHERE id = ?`, id))
 }
 
-// GetOrCreateLocation returns the location for code, creating it (attributed
-// to userID) if this is the first time it's been seen — mirroring how a new
-// asset tag auto-creates an item.
-func (s *Store) GetOrCreateLocation(ctx context.Context, code string, userID int64) (domain.Location, error) {
-	loc, err := s.GetLocationByCode(ctx, code)
+// GetOrCreateLocation returns the location for locationTag, creating it
+// (attributed to userID) if this is the first time it's been seen —
+// mirroring how a new asset tag auto-creates an item.
+func (s *Store) GetOrCreateLocation(ctx context.Context, locationTag string, userID int64) (domain.Location, error) {
+	if err := s.RegisterLocationTag(ctx, locationTag); err != nil {
+		return domain.Location{}, err
+	}
+
+	loc, err := s.GetLocationByLocationTag(ctx, locationTag)
 	if err == nil {
 		return loc, nil
 	}
@@ -32,11 +36,11 @@ func (s *Store) GetOrCreateLocation(ctx context.Context, code string, userID int
 		return domain.Location{}, err
 	}
 
-	res, err := s.db.ExecContext(ctx, `INSERT INTO locations (code, created_by) VALUES (?, ?)`, code, userID)
+	res, err := s.db.ExecContext(ctx, `INSERT INTO locations (location_tag, created_by) VALUES (?, ?)`, locationTag, userID)
 	if err != nil {
 		if isUniqueConstraintErr(err) {
 			// lost a create race; the row exists now, just fetch it
-			return s.GetLocationByCode(ctx, code)
+			return s.GetLocationByLocationTag(ctx, locationTag)
 		}
 		return domain.Location{}, fmt.Errorf("create location: %w", err)
 	}
@@ -50,7 +54,7 @@ func (s *Store) GetOrCreateLocation(ctx context.Context, code string, userID int
 func (s *Store) scanLocation(row *sql.Row) (domain.Location, error) {
 	var loc domain.Location
 	var createdAt string
-	if err := row.Scan(&loc.ID, &loc.Code, &loc.Description, &createdAt, &loc.CreatedBy); err != nil {
+	if err := row.Scan(&loc.ID, &loc.LocationTag, &loc.Description, &createdAt, &loc.CreatedBy); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Location{}, ErrNotFound
 		}
@@ -62,7 +66,7 @@ func (s *Store) scanLocation(row *sql.Row) (domain.Location, error) {
 
 // ListLocations powers the location view's sidebar (README flow #4).
 func (s *Store) ListLocations(ctx context.Context) ([]domain.Location, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, code, description, created_at, created_by FROM locations ORDER BY code`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, location_tag, description, created_at, created_by FROM locations ORDER BY location_tag`)
 	if err != nil {
 		return nil, fmt.Errorf("list locations: %w", err)
 	}
@@ -72,7 +76,7 @@ func (s *Store) ListLocations(ctx context.Context) ([]domain.Location, error) {
 	for rows.Next() {
 		var loc domain.Location
 		var createdAt string
-		if err := rows.Scan(&loc.ID, &loc.Code, &loc.Description, &createdAt, &loc.CreatedBy); err != nil {
+		if err := rows.Scan(&loc.ID, &loc.LocationTag, &loc.Description, &createdAt, &loc.CreatedBy); err != nil {
 			return nil, fmt.Errorf("scan location: %w", err)
 		}
 		loc.CreatedAt, _ = time.Parse(time.DateTime, createdAt)
@@ -82,7 +86,7 @@ func (s *Store) ListLocations(ctx context.Context) ([]domain.Location, error) {
 }
 
 // UpdateLocationDescription sets (or clears, with "") a location's optional
-// description — the locations view's under-the-code editor for the
+// description — the locations view's under-the-tag editor for the
 // currently selected location.
 func (s *Store) UpdateLocationDescription(ctx context.Context, id int64, description string) error {
 	res, err := s.db.ExecContext(ctx, `UPDATE locations SET description = ? WHERE id = ?`, description, id)
@@ -147,10 +151,14 @@ func (s *Store) SetItemLocation(ctx context.Context, itemID int64, locationID *i
 // rather than leaving some items moved and others not.
 func (s *Store) ApplyReconciliation(ctx context.Context, userID int64, diff domain.ReconcileDiff) error {
 	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if err := registerLocationTagTx(ctx, tx, diff.LocationTag); err != nil {
+			return err
+		}
+
 		var locationID int64
-		err := tx.QueryRowContext(ctx, `SELECT id FROM locations WHERE code = ?`, diff.LocationCode).Scan(&locationID)
+		err := tx.QueryRowContext(ctx, `SELECT id FROM locations WHERE location_tag = ?`, diff.LocationTag).Scan(&locationID)
 		if errors.Is(err, sql.ErrNoRows) {
-			res, err := tx.ExecContext(ctx, `INSERT INTO locations (code, created_by) VALUES (?, ?)`, diff.LocationCode, userID)
+			res, err := tx.ExecContext(ctx, `INSERT INTO locations (location_tag, created_by) VALUES (?, ?)`, diff.LocationTag, userID)
 			if err != nil {
 				return fmt.Errorf("create location: %w", err)
 			}
@@ -177,12 +185,15 @@ func (s *Store) ApplyReconciliation(ctx context.Context, userID int64, diff doma
 		}
 
 		for _, tag := range diff.New {
+			if err := registerAssetTagTx(ctx, tx, tag); err != nil {
+				return err
+			}
 			res, err := tx.ExecContext(ctx, `INSERT INTO items (asset_tag, location_id) VALUES (?, ?)`, tag, locationID)
 			if err != nil {
 				if isUniqueConstraintErr(err) {
 					// lost a create race (e.g. a concurrent tag-capture claimed this
 					// tag between preview and apply) — the item exists now, just link it
-					if err := relink(tag, fmt.Sprintf("added to %s", diff.LocationCode)); err != nil {
+					if err := relink(tag, fmt.Sprintf("added to %s", diff.LocationTag)); err != nil {
 						return err
 					}
 					continue
@@ -196,20 +207,26 @@ func (s *Store) ApplyReconciliation(ctx context.Context, userID int64, diff doma
 			if _, err := tx.ExecContext(ctx, `
 				INSERT INTO activity (user_id, action, item_id, location_id, detail) VALUES (?, ?, ?, ?, ?)`,
 				userID, string(domain.ActivityItemCreated), itemID, locationID,
-				fmt.Sprintf("created via location scan at %s", diff.LocationCode)); err != nil {
+				fmt.Sprintf("created via location scan at %s", diff.LocationTag)); err != nil {
 				return err
 			}
 		}
 
 		for _, tag := range diff.Added {
-			if err := relink(tag, fmt.Sprintf("added to %s", diff.LocationCode)); err != nil {
+			if err := registerAssetTagTx(ctx, tx, tag); err != nil {
+				return err
+			}
+			if err := relink(tag, fmt.Sprintf("added to %s", diff.LocationTag)); err != nil {
 				return err
 			}
 		}
 		for _, m := range diff.Moved {
-			detail := fmt.Sprintf("moved to %s", diff.LocationCode)
+			if err := registerAssetTagTx(ctx, tx, m.AssetTag); err != nil {
+				return err
+			}
+			detail := fmt.Sprintf("moved to %s", diff.LocationTag)
 			if m.FromLocation != "" {
-				detail = fmt.Sprintf("moved to %s (was %s)", diff.LocationCode, m.FromLocation)
+				detail = fmt.Sprintf("moved to %s (was %s)", diff.LocationTag, m.FromLocation)
 			}
 			if err := relink(m.AssetTag, detail); err != nil {
 				return err
@@ -223,7 +240,7 @@ func (s *Store) ApplyReconciliation(ctx context.Context, userID int64, diff doma
 			if _, err := tx.ExecContext(ctx, `UPDATE items SET location_id = NULL, updated_at = datetime('now') WHERE id = ?`, itemID); err != nil {
 				return fmt.Errorf("unlink item %s: %w", tag, err)
 			}
-			detail := fmt.Sprintf("removed from %s", diff.LocationCode)
+			detail := fmt.Sprintf("removed from %s", diff.LocationTag)
 			if _, err := tx.ExecContext(ctx, `
 				INSERT INTO activity (user_id, action, item_id, location_id, detail) VALUES (?, ?, ?, ?, ?)`,
 				userID, string(domain.ActivityItemRemovedFromLocation), itemID, locationID, detail); err != nil {

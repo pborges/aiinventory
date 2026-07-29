@@ -13,14 +13,14 @@ const MONOKAI_SWATCHES = [
   { name: 'purple', color: '#ae81ff' },
 ]
 
-export function TagColorPicker({ value, onChange }: Props) {
+export function LabelColorPicker({ value, onChange }: Props) {
   return (
-    <div class="tag-color-picker">
+    <div class="label-color-picker">
       {MONOKAI_SWATCHES.map((swatch) => (
         <button
           type="button"
           key={swatch.color}
-          class={`tag-color-swatch${value.toLowerCase() === swatch.color ? ' tag-color-swatch-selected' : ''}`}
+          class={`label-color-swatch${value.toLowerCase() === swatch.color ? ' label-color-swatch-selected' : ''}`}
           style={{ '--swatch-color': swatch.color }}
           aria-label={swatch.name}
           onClick={() => onChange(swatch.color)}
@@ -28,7 +28,7 @@ export function TagColorPicker({ value, onChange }: Props) {
       ))}
       <input
         type="color"
-        class="tag-color-custom"
+        class="label-color-custom"
         value={value || '#a6e22e'}
         onInput={(e) => onChange((e.target as HTMLInputElement).value)}
         aria-label="Custom color"

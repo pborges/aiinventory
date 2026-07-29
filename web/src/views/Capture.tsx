@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { faCamera, faMap, faXmark, faCheck } from '@fortawesome/free-solid-svg-icons'
-import { api, ApiError, type ReconcileDiffResponse } from '../api/client'
+import { api, ApiError, type ReconcileDiffResponse, type TagResolution } from '../api/client'
 import { captureSquareFrame, rotateSquareBlob } from '../lib/camera'
 import { ReconcileDiff } from '../components/ReconcileDiff'
-import { TagAgreementReview } from '../components/TagAgreementReview'
+import { TagAgreementReview, type TagReviewRow } from '../components/TagAgreementReview'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { Icon } from '../components/Icon'
@@ -13,22 +13,54 @@ interface RouteProps {
   default?: boolean
 }
 
-type Phase = 'live' | 'analyzing' | 'awaiting-accept' | 'committing' | 'result'
+type Phase = 'live' | 'analyzing' | 'awaiting-accept' | 'awaiting-location-tag' | 'committing' | 'result'
 type CaptureMode = 'ingest' | 'locate'
 
 interface PendingCapture {
   assetTag: string
+  rawAssetTag: string
+  corrected: boolean
+  needsResolution: boolean
+  candidates: string[]
   guess: string
   description: string
   itemWillBeNew: boolean
 }
 
+const ASSET_TAG_PATTERN = /^[A-Z]{4}$/
+const LOCATION_TAG_PATTERN = /^@[A-Z]{3}$/
+
 type ResultData = { kind: 'nothing' } | { kind: 'error'; message: string }
 
 interface TagReviewState {
-  locationCode: string
+  locationTag: string
   agreedTags: string[]
-  diffTags: string[]
+  rows: TagReviewRow[]
+}
+
+// Stashes the locate flow's straight/rotated preview reads while the
+// operator resolves an unconfident location-tag OCR read — so the flow can
+// resume straight into the asset-tag presence-agreement step without
+// re-calling Gemini.
+interface LocationTagResolutionState {
+  straight: ReconcileDiffResponse
+  rotated: ReconcileDiffResponse
+}
+
+// Builds the "needs a human look" row set for one raw asset tag, from
+// whichever read(s) flagged it — used for both the tag-review step and the
+// corrected-tag annotations carried into the final approval modal.
+function resolutionsByRaw(resolutionLists: (TagResolution[] | undefined)[]): Map<string, TagResolution> {
+  const byRaw = new Map<string, TagResolution>()
+  for (const list of resolutionLists) {
+    for (const res of list ?? []) {
+      const existing = byRaw.get(res.raw)
+      if (!existing || (existing.status === 'exact' && res.status !== 'exact')) {
+        byRaw.set(res.raw, res)
+      }
+    }
+  }
+  return byRaw
 }
 
 export function Capture(_props: RouteProps) {
@@ -39,11 +71,19 @@ export function Capture(_props: RouteProps) {
   const [mode, setMode] = useState<CaptureMode>('ingest')
   const [frozenFrameUrl, setFrozenFrameUrl] = useState<string | null>(null)
   const [pendingCapture, setPendingCapture] = useState<PendingCapture | null>(null)
+  const [resolvedTag, setResolvedTag] = useState('')
   const [result, setResult] = useState<ResultData | null>(null)
   const [pendingDiff, setPendingDiff] = useState<ReconcileDiffResponse | null>(null)
   const [applyingReconcile, setApplyingReconcile] = useState(false)
   const [tagReview, setTagReview] = useState<TagReviewState | null>(null)
   const [confirmingTagReview, setConfirmingTagReview] = useState(false)
+  const [locationTagResolution, setLocationTagResolution] = useState<LocationTagResolutionState | null>(null)
+  const [resolvedLocationTag, setResolvedLocationTag] = useState('')
+  // resolved tag -> raw OCR read, for any tag that reached the approval
+  // modal via a registry correction — carried separately from pendingDiff
+  // since /api/reconcile/diff doesn't re-run resolution and can't
+  // reconstruct this after the tag-review step.
+  const [correctedTags, setCorrectedTags] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let stream: MediaStream | null = null
@@ -79,9 +119,79 @@ export function Capture(_props: RouteProps) {
   function resetToLive() {
     setFrozenFrameUrl(null)
     setPendingCapture(null)
+    setResolvedTag('')
     setResult(null)
+    setCorrectedTags({})
+    setLocationTagResolution(null)
+    setResolvedLocationTag('')
     capturedBlobRef.current = null
     setPhase('live')
+  }
+
+  // Runs the asset-tag presence-agreement step against an already-confirmed
+  // location tag — shared by both the exact-match path (called straight out
+  // of onCapture) and the post-resolver path (called from
+  // onConfirmLocationTag). If the confirmed tag differs from what the
+  // straight/rotated diffs were actually computed against (only possible
+  // when a resolution happened), the diff is stale and gets refetched
+  // before anything is shown for approval.
+  async function continueWithAssetTags(locationTag: string, straight: ReconcileDiffResponse, rotated: ReconcileDiffResponse) {
+    // Presence agreement is computed over the RAW reads (every tag_
+    // resolutions entry, not just the ones that made it into asset_tags —
+    // asset_tags on a preview response only ever contains exact registry
+    // matches; anything corrected/ambiguous/unmatched is deliberately
+    // held back from it, see handleReconcilePreview).
+    const straightRaw = (straight.tag_resolutions ?? []).map((r) => r.raw)
+    const rotatedRaw = (rotated.tag_resolutions ?? []).map((r) => r.raw)
+    const straightRawSet = new Set(straightRaw)
+    const rotatedRawSet = new Set(rotatedRaw)
+    const presenceAgreed = straightRaw.filter((tag) => rotatedRawSet.has(tag))
+    const presenceDiff = [...new Set([...straightRaw, ...rotatedRaw])].filter(
+      (tag) => !(straightRawSet.has(tag) && rotatedRawSet.has(tag)),
+    )
+
+    const resByRaw = resolutionsByRaw([straight.tag_resolutions, rotated.tag_resolutions])
+
+    // Trusted enough to skip review entirely: both reads saw it AND it's
+    // an exact registry match.
+    const agreedTags = presenceAgreed.filter((tag) => resByRaw.get(tag)?.status === 'exact')
+
+    // Everything else needs a human look: presence disagreements, or any
+    // tag (agreed-on or not) that isn't an exact registry match.
+    const needsReview = new Set(presenceDiff)
+    for (const [raw, res] of resByRaw) {
+      if (res.status !== 'exact') needsReview.add(raw)
+    }
+    for (const tag of agreedTags) needsReview.delete(tag)
+
+    if (needsReview.size === 0) {
+      try {
+        // stays in 'analyzing' (spinner) until the modal is resolved
+        if (locationTag === straight.location_tag) {
+          setPendingDiff(straight) // full agreement, confirmed tag matches what the diff was computed against
+        } else {
+          setPendingDiff(await api.reconcileDiff(locationTag, agreedTags))
+        }
+      } catch (err) {
+        setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Capture failed' })
+        setPhase('result')
+      }
+      return
+    }
+
+    // A confident single-candidate correction is still worth surfacing on
+    // the final approval screen even after the operator confirms it here.
+    const corrections: Record<string, string> = {}
+    for (const [raw, res] of resByRaw) {
+      if (res.status === 'corrected' && res.candidates?.[0]) corrections[res.candidates[0]] = raw
+    }
+    setCorrectedTags(corrections)
+
+    const rows: TagReviewRow[] = [...needsReview].map((raw) => ({
+      raw,
+      candidates: resByRaw.get(raw)?.candidates ?? [],
+    }))
+    setTagReview({ locationTag, agreedTags, rows })
   }
 
   async function onCapture() {
@@ -95,7 +205,7 @@ export function Capture(_props: RouteProps) {
 
     try {
       // Which flow runs is an explicit user choice (the mode toggle below
-      // the viewfinder), not auto-detected — asset tags and location codes
+      // the viewfinder), not auto-detected — asset tags and location tags
       // can both be a handful of uppercase letters on a white sticker, and
       // guessing which one Gemini should look for was unreliable in
       // practice. Analyzing a tag never writes anything by itself; the
@@ -103,12 +213,22 @@ export function Capture(_props: RouteProps) {
       if (mode === 'ingest') {
         const preview = await api.capturePreview(blob)
         if (preview.has_asset_tag) {
+          const needsResolution = !!preview.needs_resolution
           setPendingCapture({
             assetTag: preview.asset_tag ?? '',
+            rawAssetTag: preview.raw_asset_tag ?? '',
+            corrected: !!preview.corrected,
+            needsResolution,
+            candidates: preview.candidates ?? [],
             guess: preview.item_guess ?? '',
             description: preview.image_description ?? '',
             itemWillBeNew: !!preview.item_will_be_new,
           })
+          // Exact match: pre-fill with the resolved tag, zero friction. A
+          // confident correction: pre-fill with the suggested tag as a
+          // one-tap-to-accept default. Ambiguous/no-match: leave blank —
+          // there's no safe default to guess at.
+          setResolvedTag(needsResolution ? (preview.corrected ? (preview.candidates?.[0] ?? '') : '') : (preview.asset_tag ?? ''))
           setPhase('awaiting-accept')
           return
         }
@@ -125,7 +245,7 @@ export function Capture(_props: RouteProps) {
       // upright), so this second call can't start until the first returns —
       // no parallelizing this one.
       const straight = await api.reconcilePreview(blob)
-      if (!straight.has_location_code) {
+      if (!straight.has_location_tag) {
         setResult({ kind: 'nothing' })
         setPhase('result')
         return
@@ -134,41 +254,58 @@ export function Capture(_props: RouteProps) {
       const rotatedBlob = await rotateSquareBlob(blob, rotationDegrees)
       const rotated = await api.reconcilePreview(rotatedBlob)
 
-      const codesAgree = rotated.has_location_code && straight.location_code === rotated.location_code
-      if (!codesAgree) {
+      const tagsAgree = rotated.has_location_tag && straight.location_tag === rotated.location_tag
+      if (!tagsAgree) {
         setResult({ kind: 'nothing' })
         setPhase('result')
         return
       }
 
-      const straightTags = new Set(straight.asset_tags)
-      const rotatedTags = new Set(rotated.asset_tags)
-      const agreedTags = straight.asset_tags.filter((tag) => rotatedTags.has(tag))
-      const diffTags = [...new Set([...straight.asset_tags, ...rotated.asset_tags])].filter(
-        (tag) => !(straightTags.has(tag) && rotatedTags.has(tag)),
-      )
-
-      if (diffTags.length === 0) {
-        setPendingDiff(straight) // full agreement — stays in 'analyzing' (spinner) until the modal is resolved
+      // The location tag has to be resolved before the diff above (which was
+      // computed against the raw, possibly-misread text) can be trusted —
+      // see continueWithAssetTags's refetch-on-mismatch handling below.
+      if (straight.location_tag_needs_resolution) {
+        setLocationTagResolution({ straight, rotated })
+        setResolvedLocationTag(straight.location_tag_corrected ? (straight.location_tag_candidates?.[0] ?? '') : '')
+        setPhase('awaiting-location-tag')
         return
       }
 
-      setTagReview({ locationCode: straight.location_code!, agreedTags, diffTags })
+      await continueWithAssetTags(straight.location_tag!, straight, rotated)
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Capture failed' })
       setPhase('result')
     }
   }
 
-  async function onConfirmTagReview(selectedDiffTags: string[]) {
+  async function onConfirmLocationTag() {
+    if (!locationTagResolution || !LOCATION_TAG_PATTERN.test(resolvedLocationTag)) return
+    const { straight, rotated } = locationTagResolution
+    const locationTag = resolvedLocationTag
+    setLocationTagResolution(null)
+    setPhase('analyzing') // back to the spinner while the asset-tag step (and possibly a diff refetch) runs
+    try {
+      await continueWithAssetTags(locationTag, straight, rotated)
+    } catch (err) {
+      setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Capture failed' })
+      setPhase('result')
+    }
+  }
+
+  function onCancelLocationTag() {
+    setLocationTagResolution(null)
+    resetToLive()
+  }
+
+  async function onConfirmTagReview(resolvedRowTags: string[]) {
     if (!tagReview) return
     setConfirmingTagReview(true)
     try {
-      const assetTags = [...tagReview.agreedTags, ...selectedDiffTags]
-      const diff = await api.reconcileDiff(tagReview.locationCode, assetTags)
+      const assetTags = [...tagReview.agreedTags, ...resolvedRowTags]
+      const diff = await api.reconcileDiff(tagReview.locationTag, assetTags)
       setTagReview(null)
       setConfirmingTagReview(false)
-      if (diff.has_location_code) {
+      if (diff.has_location_tag) {
         setPendingDiff(diff) // stays in 'analyzing' (spinner) until the modal is resolved
         return
       }
@@ -188,10 +325,10 @@ export function Capture(_props: RouteProps) {
   }
 
   async function onAcceptCapture() {
-    if (!pendingCapture || !capturedBlobRef.current) return
+    if (!pendingCapture || !capturedBlobRef.current || !ASSET_TAG_PATTERN.test(resolvedTag)) return
     setPhase('committing')
     try {
-      await api.captureApply(capturedBlobRef.current, pendingCapture.assetTag, pendingCapture.description)
+      await api.captureApply(capturedBlobRef.current, resolvedTag, pendingCapture.description)
       resetToLive() // saved successfully — clear everything and go straight back to a live, ready-to-shoot camera
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Save failed' })
@@ -201,10 +338,10 @@ export function Capture(_props: RouteProps) {
   }
 
   async function onApproveReconcile(assetTags: string[]) {
-    if (!pendingDiff?.location_code) return
+    if (!pendingDiff?.location_tag) return
     setApplyingReconcile(true)
     try {
-      await api.reconcileApply(pendingDiff.location_code, assetTags)
+      await api.reconcileApply(pendingDiff.location_tag, assetTags)
       setPendingDiff(null)
       setApplyingReconcile(false)
       resetToLive() // applied successfully — clear everything and go straight back to a live, ready-to-shoot camera
@@ -267,12 +404,42 @@ export function Capture(_props: RouteProps) {
 
           {phase === 'awaiting-accept' && pendingCapture && (
             <div class="capture-result-card">
-              <div class="capture-result-header">
-                <span class="capture-result-tag">{pendingCapture.assetTag}</span>
-                <span class="capture-result-action">
-                  {pendingCapture.itemWillBeNew ? 'Will add new item' : 'Will add new photo'}
-                </span>
-              </div>
+              {pendingCapture.needsResolution ? (
+                <div class="capture-tag-resolver">
+                  <p class="capture-tag-resolver-hint">
+                    OCR read <strong>{pendingCapture.rawAssetTag}</strong>
+                    {pendingCapture.corrected ? ' — pick the correct tag:' : ' — no confident match, pick or type the correct tag:'}
+                  </p>
+                  <div class="capture-tag-choices">
+                    {[...new Set([pendingCapture.rawAssetTag, ...pendingCapture.candidates])].map((choice) => (
+                      <button
+                        type="button"
+                        class={'capture-tag-choice' + (resolvedTag === choice ? ' capture-tag-choice-active' : '')}
+                        onClick={() => setResolvedTag(choice)}
+                        key={choice}
+                      >
+                        {choice}
+                      </button>
+                    ))}
+                  </div>
+                  <label class="capture-tag-manual">
+                    Or type the correct tag
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={resolvedTag}
+                      onInput={(e) => setResolvedTag((e.target as HTMLInputElement).value.toUpperCase())}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div class="capture-result-header">
+                  <span class="capture-result-tag">{pendingCapture.assetTag}</span>
+                  <span class="capture-result-action">
+                    {pendingCapture.itemWillBeNew ? 'Will add new item' : 'Will add new photo'}
+                  </span>
+                </div>
+              )}
               {pendingCapture.guess && <p class="capture-result-guess">{pendingCapture.guess}</p>}
               <p class="capture-result-description">
                 {pendingCapture.description || <em>No notes read from this photo.</em>}
@@ -281,11 +448,51 @@ export function Capture(_props: RouteProps) {
             </div>
           )}
 
+          {phase === 'awaiting-location-tag' && locationTagResolution && (
+            <div class="capture-result-card">
+              <div class="capture-tag-resolver">
+                <p class="capture-tag-resolver-hint">
+                  OCR read <strong>{locationTagResolution.straight.raw_location_tag}</strong>
+                  {locationTagResolution.straight.location_tag_corrected
+                    ? ' — pick the correct location tag:'
+                    : ' — no confident match, pick or type the correct location tag:'}
+                </p>
+                <div class="capture-tag-choices">
+                  {[
+                    ...new Set([
+                      locationTagResolution.straight.raw_location_tag ?? '',
+                      ...(locationTagResolution.straight.location_tag_candidates ?? []),
+                    ]),
+                  ].map((choice) => (
+                    <button
+                      type="button"
+                      class={'capture-tag-choice' + (resolvedLocationTag === choice ? ' capture-tag-choice-active' : '')}
+                      onClick={() => setResolvedLocationTag(choice)}
+                      key={choice}
+                    >
+                      {choice}
+                    </button>
+                  ))}
+                </div>
+                <label class="capture-tag-manual">
+                  Or type the correct location tag
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={resolvedLocationTag}
+                    onInput={(e) => setResolvedLocationTag((e.target as HTMLInputElement).value.toUpperCase())}
+                  />
+                </label>
+              </div>
+              <p class="capture-result-hint">Confirm the location tag to see the reconciliation diff.</p>
+            </div>
+          )}
+
           {result?.kind === 'nothing' && (
             <p class="capture-feedback capture-feedback-warning">
               {mode === 'ingest'
                 ? 'No asset tag found — retake with the label clearly visible.'
-                : 'No location code found — retake with the label clearly visible.'}
+                : 'No location tag found — retake with the label clearly visible.'}
             </p>
           )}
           {result?.kind === 'error' && <p class="capture-feedback capture-feedback-error">{result.message}</p>}
@@ -293,12 +500,12 @@ export function Capture(_props: RouteProps) {
       </main>
 
       <div class="capture-controls">
-        {phase === 'awaiting-accept' ? (
+        {phase === 'awaiting-accept' || phase === 'awaiting-location-tag' ? (
           <>
             <button
               type="button"
               class="capture-button capture-button-cancel"
-              onClick={resetToLive}
+              onClick={phase === 'awaiting-location-tag' ? onCancelLocationTag : resetToLive}
               aria-label="Cancel — discard this photo"
             >
               <Icon icon={faXmark} />
@@ -306,8 +513,9 @@ export function Capture(_props: RouteProps) {
             <button
               type="button"
               class="capture-button capture-button-accept"
-              onClick={onAcceptCapture}
-              aria-label="Accept — save this item"
+              onClick={phase === 'awaiting-location-tag' ? onConfirmLocationTag : onAcceptCapture}
+              disabled={phase === 'awaiting-location-tag' ? !LOCATION_TAG_PATTERN.test(resolvedLocationTag) : !ASSET_TAG_PATTERN.test(resolvedTag)}
+              aria-label={phase === 'awaiting-location-tag' ? 'Confirm location tag' : 'Accept — save this item'}
             >
               <Icon icon={faCheck} />
             </button>
@@ -332,14 +540,15 @@ export function Capture(_props: RouteProps) {
           applying={applyingReconcile}
           onApprove={onApproveReconcile}
           onCancel={onCancelReconcile}
+          correctedTags={correctedTags}
         />
       )}
 
       {tagReview && (
         <TagAgreementReview
-          locationCode={tagReview.locationCode}
+          locationTag={tagReview.locationTag}
           agreedTags={tagReview.agreedTags}
-          diffTags={tagReview.diffTags}
+          rows={tagReview.rows}
           confirming={confirmingTagReview}
           onConfirm={onConfirmTagReview}
           onCancel={onCancelTagReview}

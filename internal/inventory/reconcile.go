@@ -11,26 +11,26 @@ import (
 )
 
 type ReconcileReadStore interface {
-	GetLocationByCode(ctx context.Context, code string) (domain.Location, error)
+	GetLocationByLocationTag(ctx context.Context, locationTag string) (domain.Location, error)
 	GetLocationByID(ctx context.Context, id int64) (domain.Location, error)
 	ListItemsByLocation(ctx context.Context, locationID int64) ([]domain.Item, error)
 	GetItemByAssetTag(ctx context.Context, tag string) (domain.Item, error)
 }
 
 // ComputeReconciliation is the pure, read-only half of README flow #2: given
-// a location code and the set of asset tags Gemini read from the same
-// frame, it classifies every change against the location's current
-// contents (new / added / moved-from-elsewhere / removed) without writing
-// anything. This is what the frontend shows for approval before the user
-// confirms — see internal/store.ApplyReconciliation for the write side.
-func ComputeReconciliation(ctx context.Context, s ReconcileReadStore, locationCode string, frameTags []string) (domain.ReconcileDiff, error) {
-	diff := domain.ReconcileDiff{LocationCode: locationCode}
+// a location tag and the set of asset tags Gemini read from the same frame,
+// it classifies every change against the location's current contents
+// (new / added / moved-from-elsewhere / removed) without writing anything.
+// This is what the frontend shows for approval before the user confirms —
+// see internal/store.ApplyReconciliation for the write side.
+func ComputeReconciliation(ctx context.Context, s ReconcileReadStore, locationTag string, frameTags []string) (domain.ReconcileDiff, error) {
+	diff := domain.ReconcileDiff{LocationTag: locationTag}
 
 	var currentItems []domain.Item
-	loc, err := s.GetLocationByCode(ctx, locationCode)
+	loc, err := s.GetLocationByLocationTag(ctx, locationTag)
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		// brand-new location code: nothing currently linked, it'll be created on apply
+		// brand-new location tag: nothing currently linked, it'll be created on apply
 	case err != nil:
 		return domain.ReconcileDiff{}, fmt.Errorf("look up location: %w", err)
 	default:
@@ -74,11 +74,11 @@ func ComputeReconciliation(ctx context.Context, s ReconcileReadStore, locationCo
 			diff.Added = append(diff.Added, tag)
 			continue
 		}
-		fromCode := ""
+		fromTag := ""
 		if fromLoc, err := s.GetLocationByID(ctx, *item.LocationID); err == nil {
-			fromCode = fromLoc.Code
+			fromTag = fromLoc.LocationTag
 		}
-		diff.Moved = append(diff.Moved, domain.MovedItem{AssetTag: tag, FromLocation: fromCode})
+		diff.Moved = append(diff.Moved, domain.MovedItem{AssetTag: tag, FromLocation: fromTag})
 	}
 
 	removed := make([]string, 0)

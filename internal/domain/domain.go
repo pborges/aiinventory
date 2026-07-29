@@ -13,7 +13,7 @@ type User struct {
 
 type Location struct {
 	ID          int64
-	Code        string // "@" + 3 uppercase-alpha chars
+	LocationTag string // "@" + 3 uppercase-alpha chars
 	Description string // "" if not set
 	CreatedAt   time.Time
 	CreatedBy   int64
@@ -28,11 +28,27 @@ type Item struct {
 	UpdatedAt   time.Time
 }
 
-type Tag struct {
+type Label struct {
 	ID        int64
 	Name      string
 	Color     string
 	CreatedAt time.Time
+}
+
+// RegisteredAssetTag is one entry in the asset-tag allow-list — a physical
+// tag that's been printed and is known-valid, used to deterministically
+// correct OCR misreads (see internal/inventory.ResolveTag).
+type RegisteredAssetTag struct {
+	ID        int64
+	Tag       string
+	CreatedAt time.Time
+}
+
+// RegisteredLocationTag mirrors RegisteredAssetTag for location tags.
+type RegisteredLocationTag struct {
+	ID          int64
+	LocationTag string
+	CreatedAt   time.Time
 }
 
 type Image struct {
@@ -51,11 +67,11 @@ type Image struct {
 // atomically by internal/store. Lives in domain (not inventory) so store can
 // consume it without depending on inventory.
 type ReconcileDiff struct {
-	LocationCode string
-	New          []string    // asset tags with no matching item anywhere — a new item is created and linked here
-	Added        []string    // asset tags newly linked to this location
-	Moved        []MovedItem // asset tags moved here from a different location
-	Removed      []string    // asset tags no longer in the frame, unlinked from this location
+	LocationTag string
+	New         []string    // asset tags with no matching item anywhere — a new item is created and linked here
+	Added       []string    // asset tags newly linked to this location
+	Moved       []MovedItem // asset tags moved here from a different location
+	Removed     []string    // asset tags no longer in the frame, unlinked from this location
 }
 
 type MovedItem struct {
@@ -78,8 +94,8 @@ const (
 	ActivityDescriptionEdited       ActivityAction = "description_edited"
 	ActivityDuplicateGroupDismissed ActivityAction = "duplicate_group_dismissed"
 	ActivityItemsMerged             ActivityAction = "items_merged"
-	ActivityItemTagsUpdated         ActivityAction = "item_tags_updated"
-	ActivityLocationTagsUpdated     ActivityAction = "location_tags_updated"
+	ActivityItemLabelsUpdated       ActivityAction = "item_labels_updated"
+	ActivityLocationLabelsUpdated   ActivityAction = "location_labels_updated"
 )
 
 type Activity struct {

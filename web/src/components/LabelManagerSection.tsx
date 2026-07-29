@@ -1,23 +1,23 @@
 import { useEffect, useState } from 'preact/hooks'
-import { ApiError, type Tag } from '../api/client'
-import { TagChip } from './TagChip'
-import { TagColorPicker } from './TagColorPicker'
+import { ApiError, type Label } from '../api/client'
+import { LabelChip } from './LabelChip'
+import { LabelColorPicker } from './LabelColorPicker'
 
 interface Props {
   title: string
   /** Noun used in the delete-confirmation sentence, e.g. "item" or "location". */
   deleteWarningTarget: string
-  list: () => Promise<{ tags: Tag[] }>
-  create: (name: string, color: string) => Promise<{ tag: Tag }>
-  update: (id: number, name: string, color: string) => Promise<{ tag: Tag }>
+  list: () => Promise<{ labels: Label[] }>
+  create: (name: string, color: string) => Promise<{ label: Label }>
+  update: (id: number, name: string, color: string) => Promise<{ label: Label }>
   remove: (id: number) => Promise<void>
 }
 
-/** Full CRUD list (name + color, add/edit/delete) for one independent tag
- * pool — Settings uses this for both the item-tag and location-tag
+/** Full CRUD list (name + color, add/edit/delete) for one independent label
+ * pool — Settings uses this for both the item-label and location-label
  * sections, which are otherwise identical UIs over two separate tables. */
-export function TagManagerSection({ title, deleteWarningTarget, list, create, update, remove }: Props) {
-  const [tags, setTags] = useState<Tag[] | null>(null)
+export function LabelManagerSection({ title, deleteWarningTarget, list, create, update, remove }: Props) {
+  const [labels, setLabels] = useState<Label[] | null>(null)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#a6e22e')
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -34,7 +34,7 @@ export function TagManagerSection({ title, deleteWarningTarget, list, create, up
 
   function load() {
     list()
-      .then((res) => setTags(res.tags))
+      .then((res) => setLabels(res.labels))
       .catch((err) => setError(err instanceof ApiError ? err.message : `Failed to load ${title.toLowerCase()}`))
   }
 
@@ -47,16 +47,16 @@ export function TagManagerSection({ title, deleteWarningTarget, list, create, up
       setNewName('')
       load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to create tag')
+      setError(err instanceof ApiError ? err.message : 'Failed to create label')
     } finally {
       setBusy(false)
     }
   }
 
-  function startEditing(tag: Tag) {
-    setEditingId(tag.id)
-    setEditingName(tag.name)
-    setEditingColor(tag.color)
+  function startEditing(label: Label) {
+    setEditingId(label.id)
+    setEditingName(label.name)
+    setEditingColor(label.color)
   }
 
   async function onSaveEdit(e: Event) {
@@ -69,44 +69,44 @@ export function TagManagerSection({ title, deleteWarningTarget, list, create, up
       setEditingId(null)
       load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to update tag')
+      setError(err instanceof ApiError ? err.message : 'Failed to update label')
     } finally {
       setBusy(false)
     }
   }
 
-  async function onDelete(tag: Tag) {
+  async function onDelete(label: Label) {
     setBusy(true)
     setError(null)
     try {
-      await remove(tag.id)
+      await remove(label.id)
       setConfirmingDeleteId(null)
       load()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to delete tag')
+      setError(err instanceof ApiError ? err.message : 'Failed to delete label')
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <section class="settings-tags">
+    <section class="settings-labels">
       <h2>{title}</h2>
 
-      <ul class="settings-tag-list">
-        {tags === null && <li>Loading…</li>}
-        {tags?.map((tag) =>
-          editingId === tag.id ? (
-            <li class="settings-tag-row" key={tag.id}>
-              <form class="settings-new-tag-form" onSubmit={onSaveEdit}>
+      <ul class="settings-label-list">
+        {labels === null && <li>Loading…</li>}
+        {labels?.map((label) =>
+          editingId === label.id ? (
+            <li class="settings-label-row" key={label.id}>
+              <form class="settings-new-label-form" onSubmit={onSaveEdit}>
                 <input
                   type="text"
-                  class="settings-tag-row-name-input"
+                  class="settings-label-row-name-input"
                   value={editingName}
                   onInput={(e) => setEditingName((e.target as HTMLInputElement).value)}
                   required
                 />
-                <TagColorPicker value={editingColor} onChange={setEditingColor} />
+                <LabelColorPicker value={editingColor} onChange={setEditingColor} />
                 <button type="submit" class="btn-primary" disabled={busy}>
                   Save
                 </button>
@@ -116,24 +116,24 @@ export function TagManagerSection({ title, deleteWarningTarget, list, create, up
               </form>
             </li>
           ) : (
-            <li class="settings-tag-row" key={tag.id}>
-              <TagChip tag={tag} />
-              {confirmingDeleteId === tag.id ? (
-                <span class="settings-tag-row-actions">
-                  Delete “{tag.name}” and remove it from every {deleteWarningTarget}?
+            <li class="settings-label-row" key={label.id}>
+              <LabelChip label={label} />
+              {confirmingDeleteId === label.id ? (
+                <span class="settings-label-row-actions">
+                  Delete “{label.name}” and remove it from every {deleteWarningTarget}?
                   <button type="button" onClick={() => setConfirmingDeleteId(null)} disabled={busy}>
                     Cancel
                   </button>
-                  <button type="button" class="btn-danger" onClick={() => onDelete(tag)} disabled={busy}>
+                  <button type="button" class="btn-danger" onClick={() => onDelete(label)} disabled={busy}>
                     {busy ? 'Deleting…' : 'Confirm delete'}
                   </button>
                 </span>
               ) : (
-                <span class="settings-tag-row-actions">
-                  <button type="button" onClick={() => startEditing(tag)} disabled={busy}>
+                <span class="settings-label-row-actions">
+                  <button type="button" onClick={() => startEditing(label)} disabled={busy}>
                     Edit
                   </button>
-                  <button type="button" onClick={() => setConfirmingDeleteId(tag.id)} disabled={busy}>
+                  <button type="button" onClick={() => setConfirmingDeleteId(label.id)} disabled={busy}>
                     Delete
                   </button>
                 </span>
@@ -143,17 +143,17 @@ export function TagManagerSection({ title, deleteWarningTarget, list, create, up
         )}
       </ul>
 
-      <form class="settings-new-tag-form" onSubmit={onCreate}>
+      <form class="settings-new-label-form" onSubmit={onCreate}>
         <input
           type="text"
-          placeholder="Tag name"
+          placeholder="Label name"
           value={newName}
           onInput={(e) => setNewName((e.target as HTMLInputElement).value)}
           required
         />
-        <TagColorPicker value={newColor} onChange={setNewColor} />
+        <LabelColorPicker value={newColor} onChange={setNewColor} />
         <button type="submit" class="btn-primary" disabled={busy}>
-          Add tag
+          Add label
         </button>
       </form>
       {error && <p class="settings-status settings-status-error">{error}</p>}

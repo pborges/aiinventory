@@ -10,29 +10,29 @@ import (
 )
 
 type SearchParams struct {
-	Query          string // free-text FTS query; "" means no text search, filters only
-	NoDescription  bool
-	NoLocation     bool
-	NoPhoto        bool
-	LocationID     *int64
-	TagIDs         []int64 // non-empty: item must have at least one of these tags (OR)
-	LocationTagIDs []int64 // non-empty: item's location must have at least one of these tags (OR)
+	Query            string // free-text FTS query; "" means no text search, filters only
+	NoDescription    bool
+	NoLocation       bool
+	NoPhoto          bool
+	LocationID       *int64
+	LabelIDs         []int64 // non-empty: item must have at least one of these labels (OR)
+	LocationLabelIDs []int64 // non-empty: item's location must have at least one of these labels (OR)
 }
 
 // ItemSummary is one search result: enough to render a card (asset tag,
-// description, location code, primary image, tags) without shipping full
+// description, location tag, primary image, labels) without shipping full
 // image bytes — the frontend fetches those separately via GET /api/images/{id}.
 type ItemSummary struct {
 	ID                  int64
 	AssetTag            string
 	Description         string
-	LocationCode        string // "" if unlinked
+	LocationTag         string // "" if unlinked
 	LocationDescription string // "" if unlinked or the location has no description set
 	PrimaryImageID      *int64
-	Tags                []domain.Tag
+	Labels              []domain.Label
 }
 
-const itemSummaryColumns = `items.id, items.asset_tag, items.description, locations.code, locations.description,
+const itemSummaryColumns = `items.id, items.asset_tag, items.description, locations.location_tag, locations.description,
 	       (SELECT images.id FROM images WHERE images.item_id = items.id ORDER BY images.sort_order LIMIT 1)`
 
 const itemSummarySelect = `
@@ -60,7 +60,7 @@ func (s *Store) SearchItems(ctx context.Context, params SearchParams) ([]ItemSum
 		if err != nil {
 			return nil, err
 		}
-		return attachTags(ctx, s, results)
+		return attachLabels(ctx, s, results)
 	}
 
 	// item-level hits, ranked by relevance
@@ -108,12 +108,12 @@ func (s *Store) SearchItems(ctx context.Context, params SearchParams) ([]ItemSum
 			seen[it.ID] = true
 		}
 	}
-	return attachTags(ctx, s, results)
+	return attachLabels(ctx, s, results)
 }
 
-// attachTags batch-loads tags for every result in one query and attaches
-// them, rather than querying per-item.
-func attachTags(ctx context.Context, s *Store, results []ItemSummary) ([]ItemSummary, error) {
+// attachLabels batch-loads labels for every result in one query and
+// attaches them, rather than querying per-item.
+func attachLabels(ctx context.Context, s *Store, results []ItemSummary) ([]ItemSummary, error) {
 	if len(results) == 0 {
 		return results, nil
 	}
@@ -121,12 +121,12 @@ func attachTags(ctx context.Context, s *Store, results []ItemSummary) ([]ItemSum
 	for i, r := range results {
 		ids[i] = r.ID
 	}
-	tagsByItem, err := s.ListTagsForItems(ctx, ids)
+	labelsByItem, err := s.ListLabelsForItems(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
 	for i := range results {
-		results[i].Tags = tagsByItem[results[i].ID]
+		results[i].Labels = labelsByItem[results[i].ID]
 	}
 	return results, nil
 }
@@ -146,21 +146,21 @@ func buildFilterClause(params SearchParams, args *[]any) string {
 		conds = append(conds, "items.location_id = ?")
 		*args = append(*args, *params.LocationID)
 	}
-	if len(params.TagIDs) > 0 {
-		placeholders := make([]string, len(params.TagIDs))
-		for i, tagID := range params.TagIDs {
+	if len(params.LabelIDs) > 0 {
+		placeholders := make([]string, len(params.LabelIDs))
+		for i, labelID := range params.LabelIDs {
 			placeholders[i] = "?"
-			*args = append(*args, tagID)
+			*args = append(*args, labelID)
 		}
-		conds = append(conds, "EXISTS (SELECT 1 FROM item_tags WHERE item_tags.item_id = items.id AND item_tags.tag_id IN ("+strings.Join(placeholders, ",")+"))")
+		conds = append(conds, "EXISTS (SELECT 1 FROM item_labels WHERE item_labels.item_id = items.id AND item_labels.label_id IN ("+strings.Join(placeholders, ",")+"))")
 	}
-	if len(params.LocationTagIDs) > 0 {
-		placeholders := make([]string, len(params.LocationTagIDs))
-		for i, tagID := range params.LocationTagIDs {
+	if len(params.LocationLabelIDs) > 0 {
+		placeholders := make([]string, len(params.LocationLabelIDs))
+		for i, labelID := range params.LocationLabelIDs {
 			placeholders[i] = "?"
-			*args = append(*args, tagID)
+			*args = append(*args, labelID)
 		}
-		conds = append(conds, "EXISTS (SELECT 1 FROM location_tag_links WHERE location_tag_links.location_id = items.location_id AND location_tag_links.tag_id IN ("+strings.Join(placeholders, ",")+"))")
+		conds = append(conds, "EXISTS (SELECT 1 FROM location_label_links WHERE location_label_links.location_id = items.location_id AND location_label_links.label_id IN ("+strings.Join(placeholders, ",")+"))")
 	}
 	if len(conds) == 0 {
 		return ""
@@ -172,13 +172,13 @@ func scanItemSummaries(rows *sql.Rows) ([]ItemSummary, error) {
 	var out []ItemSummary
 	for rows.Next() {
 		var it ItemSummary
-		var description, locationCode, locationDescription sql.NullString
+		var description, locationTag, locationDescription sql.NullString
 		var primaryImageID sql.NullInt64
-		if err := rows.Scan(&it.ID, &it.AssetTag, &description, &locationCode, &locationDescription, &primaryImageID); err != nil {
+		if err := rows.Scan(&it.ID, &it.AssetTag, &description, &locationTag, &locationDescription, &primaryImageID); err != nil {
 			return nil, fmt.Errorf("scan item summary: %w", err)
 		}
 		it.Description = description.String
-		it.LocationCode = locationCode.String
+		it.LocationTag = locationTag.String
 		it.LocationDescription = locationDescription.String
 		if primaryImageID.Valid {
 			it.PrimaryImageID = &primaryImageID.Int64

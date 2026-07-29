@@ -11,7 +11,7 @@ import (
 
 func TestLocationViewFlow(t *testing.T) {
 	fake := &gemini.Fake{}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	// capture two items
 	fake.TagCaptureResult = gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"}
@@ -25,7 +25,7 @@ func TestLocationViewFlow(t *testing.T) {
 	json.NewDecoder(gkei.Body).Decode(&gkeiResp)
 
 	// reconcile ZKEI into @XYZ (creates the location)
-	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationCode: true, LocationCode: "@XYZ", AssetTags: []string{"ZKEI"}}
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@XYZ", AssetTags: []string{"ZKEI"}}
 	applyReconcile(t, h, cookies, "@XYZ", []string{"ZKEI"})
 
 	// list locations
@@ -37,7 +37,7 @@ func TestLocationViewFlow(t *testing.T) {
 		Locations []locationResponse `json:"locations"`
 	}
 	json.NewDecoder(locResp.Body).Decode(&locations)
-	if len(locations.Locations) != 1 || locations.Locations[0].Code != "@XYZ" {
+	if len(locations.Locations) != 1 || locations.Locations[0].LocationTag != "@XYZ" {
 		t.Fatalf("locations = %+v, want one @XYZ", locations.Locations)
 	}
 	xyzID := locations.Locations[0].ID

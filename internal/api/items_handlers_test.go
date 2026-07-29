@@ -11,7 +11,7 @@ import (
 
 func TestGetItemDetail(t *testing.T) {
 	fake := &gemini.Fake{TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI", Description: "S/N 1"}}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	captureResp := doCaptureUpload(t, h, cookies, []byte("photo-1"))
 	var captured captureResponse
@@ -37,7 +37,7 @@ func TestGetItemDetail(t *testing.T) {
 }
 
 func TestGetItemDetailNotFound(t *testing.T) {
-	h, cookies := newTestServerWithGemini(t, nil)
+	h, cookies, _ := newTestServerWithGemini(t, nil)
 	w := doJSON(t, h, http.MethodGet, "/api/items/999", nil, cookies)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", w.Code)
@@ -46,7 +46,7 @@ func TestGetItemDetailNotFound(t *testing.T) {
 
 func TestUpdateItemDescription(t *testing.T) {
 	fake := &gemini.Fake{TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"}}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 	captureResp := doCaptureUpload(t, h, cookies, []byte("photo"))
 	var captured captureResponse
 	json.NewDecoder(captureResp.Body).Decode(&captured)
@@ -74,7 +74,7 @@ func TestUpdateItemDescription(t *testing.T) {
 
 func TestReorderImagesEndpoint(t *testing.T) {
 	fake := &gemini.Fake{TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"}}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	first := doCaptureUpload(t, h, cookies, []byte("photo-1"))
 	var firstResp captureResponse
@@ -103,7 +103,7 @@ func TestReorderImagesEndpoint(t *testing.T) {
 
 func TestDeleteImageEndpoint(t *testing.T) {
 	fake := &gemini.Fake{TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"}}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	first := doCaptureUpload(t, h, cookies, []byte("photo-1"))
 	var firstResp captureResponse
@@ -152,7 +152,7 @@ func TestDeleteImageEndpoint(t *testing.T) {
 
 func TestRegenerateItemDescriptionEndpoint(t *testing.T) {
 	fake := &gemini.Fake{TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI", Description: "S/N 12345"}}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	captureResp := doCaptureUpload(t, h, cookies, []byte("photo"))
 	var captured captureResponse
@@ -181,7 +181,7 @@ func TestRegenerateItemDescriptionEndpoint(t *testing.T) {
 }
 
 func TestRegenerateItemDescriptionWithoutGemini(t *testing.T) {
-	h, cookies := newTestServerWithGemini(t, nil)
+	h, cookies, _ := newTestServerWithGemini(t, nil)
 	w := doJSON(t, h, http.MethodPost, "/api/items/1/regenerate-description", nil, cookies)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", w.Code)

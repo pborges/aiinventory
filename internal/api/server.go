@@ -67,14 +67,14 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStor
 	mux.Handle("POST /api/items/{id}/regenerate-description", srv.requireAuth(srv.handleRegenerateItemDescription))
 	mux.Handle("PUT /api/items/{id}/images/order", srv.requireAuth(srv.handleReorderImages))
 	mux.Handle("DELETE /api/items/{id}/images/{imageId}", srv.requireAuth(srv.handleDeleteImage))
-	mux.Handle("PUT /api/items/{id}/tags", srv.requireAuth(srv.handleSetItemTags))
+	mux.Handle("PUT /api/items/{id}/labels", srv.requireAuth(srv.handleSetItemLabels))
 
 	mux.Handle("GET /api/locations", srv.requireAuth(srv.handleListLocations))
 	mux.Handle("PUT /api/locations/{id}", srv.requireAuth(srv.handleUpdateLocation))
 	mux.Handle("GET /api/locations/{id}/items", srv.requireAuth(srv.handleGetLocationItems))
 	mux.Handle("GET /api/locations/{id}/activity", srv.requireAuth(srv.handleGetLocationActivity))
 	mux.Handle("POST /api/locations/{id}/move-item", srv.requireAuth(srv.handleMoveItem))
-	mux.Handle("PUT /api/locations/{id}/tags", srv.requireAuth(srv.handleSetLocationTags))
+	mux.Handle("PUT /api/locations/{id}/labels", srv.requireAuth(srv.handleSetLocationLabels))
 
 	mux.Handle("GET /api/duplicates/status", srv.requireAuth(srv.handleDuplicatesStatus))
 	mux.Handle("POST /api/duplicates/run", srv.requireAuth(srv.handleStartDuplicateRun))
@@ -86,15 +86,25 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStor
 	mux.Handle("POST /api/users", srv.requireAuth(srv.handleCreateUser))
 	mux.Handle("PUT /api/users/{id}", srv.requireAuth(srv.handleSetUserEnabled))
 
-	mux.Handle("GET /api/tags", srv.requireAuth(srv.handleListTags))
-	mux.Handle("POST /api/tags", srv.requireAuth(srv.handleCreateTag))
-	mux.Handle("PUT /api/tags/{id}", srv.requireAuth(srv.handleUpdateTag))
-	mux.Handle("DELETE /api/tags/{id}", srv.requireAuth(srv.handleDeleteTag))
+	mux.Handle("GET /api/labels", srv.requireAuth(srv.handleListLabels))
+	mux.Handle("POST /api/labels", srv.requireAuth(srv.handleCreateLabel))
+	mux.Handle("PUT /api/labels/{id}", srv.requireAuth(srv.handleUpdateLabel))
+	mux.Handle("DELETE /api/labels/{id}", srv.requireAuth(srv.handleDeleteLabel))
 
-	mux.Handle("GET /api/location-tags", srv.requireAuth(srv.handleListLocationTags))
-	mux.Handle("POST /api/location-tags", srv.requireAuth(srv.handleCreateLocationTag))
-	mux.Handle("PUT /api/location-tags/{id}", srv.requireAuth(srv.handleUpdateLocationTag))
-	mux.Handle("DELETE /api/location-tags/{id}", srv.requireAuth(srv.handleDeleteLocationTag))
+	mux.Handle("GET /api/location-labels", srv.requireAuth(srv.handleListLocationLabels))
+	mux.Handle("POST /api/location-labels", srv.requireAuth(srv.handleCreateLocationLabel))
+	mux.Handle("PUT /api/location-labels/{id}", srv.requireAuth(srv.handleUpdateLocationLabel))
+	mux.Handle("DELETE /api/location-labels/{id}", srv.requireAuth(srv.handleDeleteLocationLabel))
+
+	mux.Handle("GET /api/tags", srv.requireAuth(srv.handleListRegisteredAssetTags))
+	mux.Handle("POST /api/tags", srv.requireAuth(srv.handleCreateRegisteredAssetTag))
+	mux.Handle("DELETE /api/tags/{id}", srv.requireAuth(srv.handleDeleteRegisteredAssetTag))
+	mux.Handle("POST /api/tags/upload", srv.requireAuth(srv.handleUploadRegisteredAssetTags))
+
+	mux.Handle("GET /api/location-tags", srv.requireAuth(srv.handleListRegisteredLocationTags))
+	mux.Handle("POST /api/location-tags", srv.requireAuth(srv.handleCreateRegisteredLocationTag))
+	mux.Handle("DELETE /api/location-tags/{id}", srv.requireAuth(srv.handleDeleteRegisteredLocationTag))
+	mux.Handle("POST /api/location-tags/upload", srv.requireAuth(srv.handleUploadRegisteredLocationTags))
 
 	mux.Handle("/", web.Handler())
 

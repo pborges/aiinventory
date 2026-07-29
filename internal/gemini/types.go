@@ -24,9 +24,9 @@ type TagCaptureResult struct {
 // ReconciliationResult is Gemini's read of a single captured photo during
 // the location-reconciliation flow (README flow #2).
 type ReconciliationResult struct {
-	HasLocationCode bool     `json:"has_location_code"`
-	LocationCode    string   `json:"location_code"`
-	AssetTags       []string `json:"asset_tags"`
+	HasLocationTag bool     `json:"has_location_tag"`
+	LocationTag    string   `json:"location_tag"`
+	AssetTags      []string `json:"asset_tags"`
 	// SuggestedRotation is "clockwise" or "counterclockwise": which way this
 	// same frame should be rotated for a clearer second read, used by the
 	// locate flow's dual-read cross-check (see reconcile_handlers.go).

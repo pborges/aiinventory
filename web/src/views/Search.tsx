@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { faLocationDot, faXmark } from '@fortawesome/free-solid-svg-icons'
-import { api, ApiError, formatLocationCode, type ItemSummary, type Tag } from '../api/client'
+import { api, ApiError, formatLocationTag, type ItemSummary, type Label } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { GenerateDescriptionsModal } from '../components/GenerateDescriptionsModal'
 import { Icon } from '../components/Icon'
-import { TagChip } from '../components/TagChip'
+import { LabelChip } from '../components/LabelChip'
 import { HoverPreview, useHoverPreview } from '../lib/hoverPreview'
 
 interface RouteProps {
@@ -13,15 +13,15 @@ interface RouteProps {
   default?: boolean
 }
 
-function parseLocationFilterFromURL(): { id: number; code: string; description?: string } | null {
+function parseLocationFilterFromURL(): { id: number; locationTag: string; description?: string } | null {
   const params = new URLSearchParams(window.location.search)
   const idStr = params.get('location_id')
-  const code = params.get('location_code')
+  const locationTag = params.get('location_tag')
   const description = params.get('location_description')
   if (!idStr) return null
   const id = parseInt(idStr, 10)
   if (Number.isNaN(id)) return null
-  return { id, code: code ?? '', description: description ?? undefined }
+  return { id, locationTag: locationTag ?? '', description: description ?? undefined }
 }
 
 export function Search(_props: RouteProps) {
@@ -30,10 +30,10 @@ export function Search(_props: RouteProps) {
   const [noLocation, setNoLocation] = useState(false)
   const [noPhoto, setNoPhoto] = useState(false)
   const [locationFilter, setLocationFilter] = useState(() => parseLocationFilterFromURL())
-  const [allTags, setAllTags] = useState<Tag[]>([])
-  const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set())
-  const [allLocationTags, setAllLocationTags] = useState<Tag[]>([])
-  const [selectedLocationTagIds, setSelectedLocationTagIds] = useState<Set<number>>(new Set())
+  const [allLabels, setAllLabels] = useState<Label[]>([])
+  const [selectedLabelIds, setSelectedLabelIds] = useState<Set<number>>(new Set())
+  const [allLocationLabels, setAllLocationLabels] = useState<Label[]>([])
+  const [selectedLocationLabelIds, setSelectedLocationLabelIds] = useState<Set<number>>(new Set())
   const [items, setItems] = useState<ItemSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -54,8 +54,8 @@ export function Search(_props: RouteProps) {
         noLocation,
         noPhoto,
         locationId: locationFilter?.id,
-        tagIds: selectedTagIds.size > 0 ? [...selectedTagIds] : undefined,
-        locationTagIds: selectedLocationTagIds.size > 0 ? [...selectedLocationTagIds] : undefined,
+        labelIds: selectedLabelIds.size > 0 ? [...selectedLabelIds] : undefined,
+        locationLabelIds: selectedLocationLabelIds.size > 0 ? [...selectedLocationLabelIds] : undefined,
       })
       .then((res) => {
         setItems(res.items)
@@ -66,8 +66,8 @@ export function Search(_props: RouteProps) {
   }
 
   useEffect(() => {
-    api.listTags().then((res) => setAllTags(res.tags))
-    api.listLocationTags().then((res) => setAllLocationTags(res.tags))
+    api.listItemLabels().then((res) => setAllLabels(res.labels))
+    api.listLocationLabels().then((res) => setAllLocationLabels(res.labels))
   }, [])
 
   useEffect(() => {
@@ -77,22 +77,22 @@ export function Search(_props: RouteProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, noDescription, noLocation, noPhoto, locationFilter, selectedTagIds, selectedLocationTagIds])
+  }, [query, noDescription, noLocation, noPhoto, locationFilter, selectedLabelIds, selectedLocationLabelIds])
 
-  function toggleTagFilter(tagId: number) {
-    setSelectedTagIds((prev) => {
+  function toggleLabelFilter(labelId: number) {
+    setSelectedLabelIds((prev) => {
       const next = new Set(prev)
-      if (next.has(tagId)) next.delete(tagId)
-      else next.add(tagId)
+      if (next.has(labelId)) next.delete(labelId)
+      else next.add(labelId)
       return next
     })
   }
 
-  function toggleLocationTagFilter(tagId: number) {
-    setSelectedLocationTagIds((prev) => {
+  function toggleLocationLabelFilter(labelId: number) {
+    setSelectedLocationLabelIds((prev) => {
       const next = new Set(prev)
-      if (next.has(tagId)) next.delete(tagId)
-      else next.add(tagId)
+      if (next.has(labelId)) next.delete(labelId)
+      else next.add(labelId)
       return next
     })
   }
@@ -174,7 +174,9 @@ export function Search(_props: RouteProps) {
             {locationFilter && (
               <span class="search-location-chip">
                 <Icon icon={faLocationDot} />{' '}
-                {locationFilter.code ? formatLocationCode(locationFilter.code, locationFilter.description) : `location #${locationFilter.id}`}
+                {locationFilter.locationTag
+                  ? formatLocationTag(locationFilter.locationTag, locationFilter.description)
+                  : `location #${locationFilter.id}`}
                 <button type="button" class="link-button" onClick={() => setLocationFilter(null)} aria-label="Clear location filter">
                   <Icon icon={faXmark} />
                 </button>
@@ -183,29 +185,29 @@ export function Search(_props: RouteProps) {
           </div>
         </div>
 
-        {(allLocationTags.length > 0 || allTags.length > 0) && (
-          <div class="search-tag-filters-card">
-            {allLocationTags.length > 0 && (
-              <div class="search-tag-filters-section">
-                <h3 class="search-tag-filters-label">Location tags</h3>
-                <div class="tag-cloud search-tag-filter">
-                  {allLocationTags.map((tag) => (
-                    <TagChip
-                      key={tag.id}
-                      tag={tag}
-                      selected={selectedLocationTagIds.has(tag.id)}
-                      onClick={() => toggleLocationTagFilter(tag.id)}
+        {(allLocationLabels.length > 0 || allLabels.length > 0) && (
+          <div class="search-label-filters-card">
+            {allLocationLabels.length > 0 && (
+              <div class="search-label-filters-section">
+                <h3 class="search-label-filters-label">Location labels</h3>
+                <div class="label-cloud search-label-filter">
+                  {allLocationLabels.map((label) => (
+                    <LabelChip
+                      key={label.id}
+                      label={label}
+                      selected={selectedLocationLabelIds.has(label.id)}
+                      onClick={() => toggleLocationLabelFilter(label.id)}
                     />
                   ))}
                 </div>
               </div>
             )}
-            {allTags.length > 0 && (
-              <div class="search-tag-filters-section">
-                <h3 class="search-tag-filters-label">Item tags</h3>
-                <div class="tag-cloud search-tag-filter">
-                  {allTags.map((tag) => (
-                    <TagChip key={tag.id} tag={tag} selected={selectedTagIds.has(tag.id)} onClick={() => toggleTagFilter(tag.id)} />
+            {allLabels.length > 0 && (
+              <div class="search-label-filters-section">
+                <h3 class="search-label-filters-label">Item labels</h3>
+                <div class="label-cloud search-label-filter">
+                  {allLabels.map((label) => (
+                    <LabelChip key={label.id} label={label} selected={selectedLabelIds.has(label.id)} onClick={() => toggleLabelFilter(label.id)} />
                   ))}
                 </div>
               </div>
@@ -252,14 +254,14 @@ export function Search(_props: RouteProps) {
                   <div class="item-card-info">
                     <div class="item-card-tag">{item.asset_tag}</div>
                     <div class="item-card-description">{item.description || <em>No description</em>}</div>
-                    {item.location_code && (
-                      <div class="item-card-location">{formatLocationCode(item.location_code, item.location_description)}</div>
+                    {item.location_tag && (
+                      <div class="item-card-location">{formatLocationTag(item.location_tag, item.location_description)}</div>
                     )}
                   </div>
-                  {item.tags.length > 0 && (
-                    <div class="item-card-tags">
-                      {item.tags.map((tag) => (
-                        <TagChip key={tag.id} tag={tag} />
+                  {item.labels.length > 0 && (
+                    <div class="item-card-labels">
+                      {item.labels.map((label) => (
+                        <LabelChip key={label.id} label={label} />
                       ))}
                     </div>
                   )}

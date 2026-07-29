@@ -9,9 +9,9 @@ import (
 	"github.com/pborges/aiinventory/internal/gemini"
 )
 
-func TestReconcilePreviewNoLocationCode(t *testing.T) {
-	fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{HasLocationCode: false}}
-	h, cookies := newTestServerWithGemini(t, fake)
+func TestReconcilePreviewNoLocationTag(t *testing.T) {
+	fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{HasLocationTag: false}}
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
 	if req.Code != http.StatusOK {
@@ -19,14 +19,14 @@ func TestReconcilePreviewNoLocationCode(t *testing.T) {
 	}
 	var resp reconcileDiffResponse
 	json.NewDecoder(req.Body).Decode(&resp)
-	if resp.HasLocationCode {
-		t.Fatalf("HasLocationCode = true, want false")
+	if resp.HasLocationTag {
+		t.Fatalf("HasLocationTag = true, want false")
 	}
 }
 
 func TestReconcilePreviewAndApplyFullFlow(t *testing.T) {
 	fake := &gemini.Fake{}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	// seed: ZKEI unlinked, GKEI at @QRS, XDKW currently at @XYZ (about to be removed)
 	fake.TagCaptureResult = gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"}
@@ -37,14 +37,14 @@ func TestReconcilePreviewAndApplyFullFlow(t *testing.T) {
 	doCaptureUpload(t, h, cookies, []byte("xdkw-photo"))
 
 	// put GKEI at @QRS and XDKW at @XYZ via a first reconciliation each
-	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationCode: true, LocationCode: "@QRS", AssetTags: []string{"GKEI"}}
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@QRS", AssetTags: []string{"GKEI"}}
 	applyReconcile(t, h, cookies, "@QRS", []string{"GKEI"})
-	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationCode: true, LocationCode: "@XYZ", AssetTags: []string{"XDKW"}}
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@XYZ", AssetTags: []string{"XDKW"}}
 	applyReconcile(t, h, cookies, "@XYZ", []string{"XDKW"})
 
 	// now reconcile @XYZ against a frame containing ZKEI + GKEI (not XDKW):
 	// ZKEI -> added, GKEI -> moved from @QRS, XDKW -> removed
-	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationCode: true, LocationCode: "@XYZ", AssetTags: []string{"ZKEI", "GKEI"}}
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@XYZ", AssetTags: []string{"ZKEI", "GKEI"}}
 	previewResp := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("xyz-frame"), nil)
 	if previewResp.Code != http.StatusOK {
 		t.Fatalf("preview status = %d, body = %s", previewResp.Code, previewResp.Body.String())
@@ -62,7 +62,7 @@ func TestReconcilePreviewAndApplyFullFlow(t *testing.T) {
 		t.Errorf("Removed = %v, want [XDKW]", diff.Removed)
 	}
 
-	// approve: apply the same location_code + asset_tags
+	// approve: apply the same location_tag + asset_tags
 	applied := applyReconcile(t, h, cookies, "@XYZ", []string{"ZKEI", "GKEI"})
 	if len(applied.Added) != 1 || len(applied.Moved) != 1 || len(applied.Removed) != 1 {
 		t.Fatalf("applied diff mismatch: %+v", applied)
@@ -77,23 +77,171 @@ func TestReconcilePreviewAndApplyFullFlow(t *testing.T) {
 	}
 }
 
-func TestReconcilePreviewRejectsMalformedLocationCode(t *testing.T) {
+func TestReconcilePreviewResolvesTagsBeforeDiffing(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies, s := newTestServerWithGemini(t, fake)
+	registerTestTag(t, s, "OORB")
+
+	// Gemini reads a garbled "QORB" for a tag that's actually the
+	// registered "OORB" — the raw read must not leak into the diff
+	// (New/Added/etc.) at all, since it hasn't been confirmed yet.
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@XYZ", AssetTags: []string{"QORB"}}
+	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
+	if req.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", req.Code, req.Body.String())
+	}
+	var resp reconcileDiffResponse
+	json.NewDecoder(req.Body).Decode(&resp)
+
+	if len(resp.AssetTags) != 0 || len(resp.New) != 0 {
+		t.Fatalf("uncorrected read leaked into diff: AssetTags=%v New=%v", resp.AssetTags, resp.New)
+	}
+	if len(resp.TagResolutions) != 1 {
+		t.Fatalf("TagResolutions = %+v, want 1 entry", resp.TagResolutions)
+	}
+	res := resp.TagResolutions[0]
+	if res.Raw != "QORB" || res.Status != "corrected" || len(res.Candidates) != 1 || res.Candidates[0] != "OORB" {
+		t.Fatalf("resolution = %+v, want {Raw:QORB Status:corrected Candidates:[OORB]}", res)
+	}
+}
+
+func TestReconcilePreviewSurfacesAmbiguousTagResolution(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies, s := newTestServerWithGemini(t, fake)
+	registerTestTag(t, s, "OORB")
+	registerTestTag(t, s, "QIRB")
+
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@XYZ", AssetTags: []string{"QORB"}}
+	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
+	var resp reconcileDiffResponse
+	json.NewDecoder(req.Body).Decode(&resp)
+
+	if len(resp.AssetTags) != 0 {
+		t.Fatalf("ambiguous read leaked into diff: AssetTags=%v", resp.AssetTags)
+	}
+	if len(resp.TagResolutions) != 1 || resp.TagResolutions[0].Status != "ambiguous" || len(resp.TagResolutions[0].Candidates) != 2 {
+		t.Fatalf("resolution = %+v, want ambiguous with 2 candidates", resp.TagResolutions)
+	}
+}
+
+func TestReconcilePreviewExactMatchFeedsTheDiff(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies, s := newTestServerWithGemini(t, fake)
+	registerTestTag(t, s, "ZKEI")
+
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@XYZ", AssetTags: []string{"ZKEI"}}
+	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
+	var resp reconcileDiffResponse
+	json.NewDecoder(req.Body).Decode(&resp)
+
+	if len(resp.AssetTags) != 1 || resp.AssetTags[0] != "ZKEI" {
+		t.Fatalf("AssetTags = %v, want [ZKEI]", resp.AssetTags)
+	}
+	if len(resp.New) != 1 || resp.New[0] != "ZKEI" {
+		t.Fatalf("New = %v, want [ZKEI]", resp.New)
+	}
+	if len(resp.TagResolutions) != 1 || resp.TagResolutions[0].Status != "exact" {
+		t.Fatalf("resolution = %+v, want exact", resp.TagResolutions)
+	}
+}
+
+func TestReconcilePreviewResolvesLocationTagBeforeDiffing(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies, s := newTestServerWithGemini(t, fake)
+	registerTestLocationTag(t, s, "@XYZ")
+
+	// Gemini reads a garbled "@XY2"-shaped-but-wrong "@XYQ" for a location
+	// that's actually the registered "@XYZ" — the diff should still be
+	// computed against the raw read (per design), but the response must
+	// flag it as needing resolution rather than silently trusting it.
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@XYQ", AssetTags: []string{"ZKEI"}}
+	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
+	if req.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", req.Code, req.Body.String())
+	}
+	var resp reconcileDiffResponse
+	json.NewDecoder(req.Body).Decode(&resp)
+
+	if resp.RawLocationTag != "@XYQ" {
+		t.Errorf("RawLocationTag = %q, want @XYQ", resp.RawLocationTag)
+	}
+	if !resp.LocationTagCorrected || !resp.LocationTagNeedsResolution {
+		t.Fatalf("resp = %+v, want LocationTagCorrected and LocationTagNeedsResolution both true", resp)
+	}
+	if len(resp.LocationTagCandidates) != 1 || resp.LocationTagCandidates[0] != "@XYZ" {
+		t.Fatalf("LocationTagCandidates = %v, want [@XYZ]", resp.LocationTagCandidates)
+	}
+}
+
+func TestReconcilePreviewExactLocationTagNeedsNoResolution(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies, s := newTestServerWithGemini(t, fake)
+	registerTestLocationTag(t, s, "@XYZ")
+
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@XYZ", AssetTags: []string{"ZKEI"}}
+	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
+	var resp reconcileDiffResponse
+	json.NewDecoder(req.Body).Decode(&resp)
+
+	if resp.LocationTagNeedsResolution || resp.LocationTagCorrected {
+		t.Fatalf("resp = %+v, want no resolution needed for an exact registry match", resp)
+	}
+	if resp.LocationTag != "@XYZ" {
+		t.Errorf("LocationTag = %q, want @XYZ", resp.LocationTag)
+	}
+}
+
+func TestReconcileApplySelfHealsLocationTagRegistry(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies, s := newTestServerWithGemini(t, fake)
+
+	// @XYZ is never registered beforehand — apply it directly, as if the
+	// operator resolved a brand-new location tag by hand.
+	applyReconcile(t, h, cookies, "@XYZ", []string{"ZKEI"})
+
+	tags, err := s.ListRegisteredLocationTags(t.Context())
+	if err != nil {
+		t.Fatalf("ListRegisteredLocationTags: %v", err)
+	}
+	if len(tags) != 1 || tags[0] != "@XYZ" {
+		t.Fatalf("ListRegisteredLocationTags = %v, want [@XYZ]", tags)
+	}
+}
+
+func TestReconcileApplySelfHealsRegistry(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies, _ := newTestServerWithGemini(t, fake)
+
+	// ZKEI is never registered or captured beforehand — apply it directly
+	// via reconcile, as if the operator resolved a tag-review row by hand.
+	applyReconcile(t, h, cookies, "@XYZ", []string{"ZKEI"})
+
+	fake.ReconciliationResult = gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@XYZ", AssetTags: []string{"ZKEI"}}
+	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
+	var resp reconcileDiffResponse
+	json.NewDecoder(req.Body).Decode(&resp)
+	if len(resp.TagResolutions) != 1 || resp.TagResolutions[0].Status != "exact" {
+		t.Fatalf("second preview after apply = %+v, want a silent exact match after self-healing", resp.TagResolutions)
+	}
+}
+
+func TestReconcilePreviewRejectsMalformedLocationTag(t *testing.T) {
 	// Gemini's JSON schema only constrains this to a string — a misread
 	// (wrong letter count, stray digit, lowercase) can still come back as
 	// "valid" JSON. The deterministic shape check must catch it before a
 	// diff is ever computed/shown.
-	for _, code := range []string{"@XY", "@WXYZ", "@xyz", "@X1Z", "XYZ", "@"} {
-		fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{HasLocationCode: true, LocationCode: code, AssetTags: []string{"ZKEI"}}}
-		h, cookies := newTestServerWithGemini(t, fake)
+	for _, tag := range []string{"@XY", "@WXYZ", "@xyz", "@X1Z", "XYZ", "@"} {
+		fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{HasLocationTag: true, LocationTag: tag, AssetTags: []string{"ZKEI"}}}
+		h, cookies, _ := newTestServerWithGemini(t, fake)
 
 		req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
 		if req.Code != http.StatusOK {
-			t.Fatalf("code %q: status = %d, body = %s", code, req.Code, req.Body.String())
+			t.Fatalf("tag %q: status = %d, body = %s", tag, req.Code, req.Body.String())
 		}
 		var resp reconcileDiffResponse
 		json.NewDecoder(req.Body).Decode(&resp)
-		if resp.HasLocationCode {
-			t.Errorf("code %q: HasLocationCode = true, want false", code)
+		if resp.HasLocationTag {
+			t.Errorf("tag %q: HasLocationTag = true, want false", tag)
 		}
 	}
 }
@@ -103,8 +251,8 @@ func TestReconcilePreviewRejectsMalformedAssetTag(t *testing.T) {
 	// whole preview rather than silently reconciling against a partial tag
 	// set (which could show real items as falsely "removed").
 	for _, tags := range [][]string{{"ZK3I"}, {"zkei"}, {"ZKEIX"}, {"ZKEI", "O0F9"}} {
-		fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{HasLocationCode: true, LocationCode: "@XYZ", AssetTags: tags}}
-		h, cookies := newTestServerWithGemini(t, fake)
+		fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{HasLocationTag: true, LocationTag: "@XYZ", AssetTags: tags}}
+		h, cookies, _ := newTestServerWithGemini(t, fake)
 
 		req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
 		if req.Code != http.StatusOK {
@@ -112,8 +260,8 @@ func TestReconcilePreviewRejectsMalformedAssetTag(t *testing.T) {
 		}
 		var resp reconcileDiffResponse
 		json.NewDecoder(req.Body).Decode(&resp)
-		if resp.HasLocationCode {
-			t.Errorf("tags %v: HasLocationCode = true, want false", tags)
+		if resp.HasLocationTag {
+			t.Errorf("tags %v: HasLocationTag = true, want false", tags)
 		}
 	}
 }
@@ -124,12 +272,12 @@ func TestReconcilePreviewIncludesSuggestedRotation(t *testing.T) {
 	// that value has to survive onto the preview response for the frontend
 	// to act on it.
 	fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{
-		HasLocationCode:   true,
-		LocationCode:      "@XYZ",
+		HasLocationTag:    true,
+		LocationTag:       "@XYZ",
 		AssetTags:         []string{"ZKEI"},
 		SuggestedRotation: "counterclockwise",
 	}}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
 	if req.Code != http.StatusOK {
@@ -147,12 +295,12 @@ func TestReconcileDiffComputesWithoutCallingGemini(t *testing.T) {
 	// dual-read analyses disagree: the frontend already has a resolved tag
 	// list by then and just needs a fresh diff, no further Gemini call.
 	fake := &gemini.Fake{ReconciliationErr: errors.New("must not call Gemini")}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	fake.TagCaptureResult = gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"}
 	doCaptureUpload(t, h, cookies, []byte("zkei-photo"))
 
-	w := doJSON(t, h, http.MethodPost, "/api/reconcile/diff", applyReconcileRequest{LocationCode: "@XYZ", AssetTags: []string{"ZKEI"}}, cookies)
+	w := doJSON(t, h, http.MethodPost, "/api/reconcile/diff", applyReconcileRequest{LocationTag: "@XYZ", AssetTags: []string{"ZKEI"}}, cookies)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
 	}
@@ -169,14 +317,14 @@ func TestReconcileDiffComputesWithoutCallingGemini(t *testing.T) {
 
 func TestReconcileDiffRejectsMalformedInput(t *testing.T) {
 	fake := &gemini.Fake{}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
-	w := doJSON(t, h, http.MethodPost, "/api/reconcile/diff", applyReconcileRequest{LocationCode: "@XY", AssetTags: []string{"ZKEI"}}, cookies)
+	w := doJSON(t, h, http.MethodPost, "/api/reconcile/diff", applyReconcileRequest{LocationTag: "@XY", AssetTags: []string{"ZKEI"}}, cookies)
 	if w.Code != http.StatusBadRequest {
-		t.Errorf("malformed location_code: status = %d, want %d", w.Code, http.StatusBadRequest)
+		t.Errorf("malformed location_tag: status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 
-	w = doJSON(t, h, http.MethodPost, "/api/reconcile/diff", applyReconcileRequest{LocationCode: "@XYZ", AssetTags: []string{"zkei"}}, cookies)
+	w = doJSON(t, h, http.MethodPost, "/api/reconcile/diff", applyReconcileRequest{LocationTag: "@XYZ", AssetTags: []string{"zkei"}}, cookies)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("malformed asset_tags: status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
@@ -184,22 +332,22 @@ func TestReconcileDiffRejectsMalformedInput(t *testing.T) {
 
 func TestReconcileApplyRejectsMalformedInput(t *testing.T) {
 	fake := &gemini.Fake{}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
-	w := doJSON(t, h, http.MethodPost, "/api/reconcile/apply", applyReconcileRequest{LocationCode: "@XY", AssetTags: []string{"ZKEI"}}, cookies)
+	w := doJSON(t, h, http.MethodPost, "/api/reconcile/apply", applyReconcileRequest{LocationTag: "@XY", AssetTags: []string{"ZKEI"}}, cookies)
 	if w.Code != http.StatusBadRequest {
-		t.Errorf("malformed location_code: status = %d, want %d", w.Code, http.StatusBadRequest)
+		t.Errorf("malformed location_tag: status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 
-	w = doJSON(t, h, http.MethodPost, "/api/reconcile/apply", applyReconcileRequest{LocationCode: "@XYZ", AssetTags: []string{"zkei"}}, cookies)
+	w = doJSON(t, h, http.MethodPost, "/api/reconcile/apply", applyReconcileRequest{LocationTag: "@XYZ", AssetTags: []string{"zkei"}}, cookies)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("malformed asset_tags: status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
 
-func applyReconcile(t *testing.T, h http.Handler, cookies []*http.Cookie, locationCode string, assetTags []string) reconcileDiffResponse {
+func applyReconcile(t *testing.T, h http.Handler, cookies []*http.Cookie, locationTag string, assetTags []string) reconcileDiffResponse {
 	t.Helper()
-	w := doJSON(t, h, http.MethodPost, "/api/reconcile/apply", applyReconcileRequest{LocationCode: locationCode, AssetTags: assetTags}, cookies)
+	w := doJSON(t, h, http.MethodPost, "/api/reconcile/apply", applyReconcileRequest{LocationTag: locationTag, AssetTags: assetTags}, cookies)
 	if w.Code != http.StatusOK {
 		t.Fatalf("apply status = %d, body = %s", w.Code, w.Body.String())
 	}

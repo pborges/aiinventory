@@ -50,36 +50,36 @@ func TestSearchItemsFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SearchItems(LocationID): %v", err)
 	}
-	if len(byLoc) != 1 || byLoc[0].AssetTag != "XDKW" || byLoc[0].LocationCode != "@XYZ" {
+	if len(byLoc) != 1 || byLoc[0].AssetTag != "XDKW" || byLoc[0].LocationTag != "@XYZ" {
 		t.Fatalf("LocationID results = %+v, want [XDKW @XYZ]", byLoc)
 	}
 
-	locTag, err := s.CreateLocationTag(ctx, "Garage", "#a6e22e")
+	locLabel, err := s.CreateLocationLabel(ctx, "Garage", "#a6e22e")
 	if err != nil {
-		t.Fatalf("CreateLocationTag: %v", err)
+		t.Fatalf("CreateLocationLabel: %v", err)
 	}
-	if err := s.SetLocationTags(ctx, loc.ID, []int64{locTag.ID}); err != nil {
-		t.Fatalf("SetLocationTags: %v", err)
+	if err := s.SetLocationLabels(ctx, loc.ID, []int64{locLabel.ID}); err != nil {
+		t.Fatalf("SetLocationLabels: %v", err)
 	}
 
-	byLocTag, err := s.SearchItems(ctx, SearchParams{LocationTagIDs: []int64{locTag.ID}})
+	byLocLabel, err := s.SearchItems(ctx, SearchParams{LocationLabelIDs: []int64{locLabel.ID}})
 	if err != nil {
-		t.Fatalf("SearchItems(LocationTagIDs): %v", err)
+		t.Fatalf("SearchItems(LocationLabelIDs): %v", err)
 	}
-	if len(byLocTag) != 1 || byLocTag[0].AssetTag != "XDKW" {
-		t.Fatalf("LocationTagIDs results = %+v, want [XDKW]", byLocTag)
+	if len(byLocLabel) != 1 || byLocLabel[0].AssetTag != "XDKW" {
+		t.Fatalf("LocationLabelIDs results = %+v, want [XDKW]", byLocLabel)
 	}
 
-	otherLocTag, err := s.CreateLocationTag(ctx, "Attic", "#f92672")
+	otherLocLabel, err := s.CreateLocationLabel(ctx, "Attic", "#f92672")
 	if err != nil {
-		t.Fatalf("CreateLocationTag: %v", err)
+		t.Fatalf("CreateLocationLabel: %v", err)
 	}
-	byUnusedLocTag, err := s.SearchItems(ctx, SearchParams{LocationTagIDs: []int64{otherLocTag.ID}})
+	byUnusedLocLabel, err := s.SearchItems(ctx, SearchParams{LocationLabelIDs: []int64{otherLocLabel.ID}})
 	if err != nil {
-		t.Fatalf("SearchItems(LocationTagIDs unused): %v", err)
+		t.Fatalf("SearchItems(LocationLabelIDs unused): %v", err)
 	}
-	if len(byUnusedLocTag) != 0 {
-		t.Fatalf("LocationTagIDs(unused) results = %+v, want none", byUnusedLocTag)
+	if len(byUnusedLocLabel) != 0 {
+		t.Fatalf("LocationLabelIDs(unused) results = %+v, want none", byUnusedLocLabel)
 	}
 }
 

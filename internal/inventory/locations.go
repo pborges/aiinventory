@@ -27,10 +27,10 @@ func MoveItemToLocation(ctx context.Context, s MoveItemStore, userID, itemID, lo
 		return domain.Item{}, fmt.Errorf("look up location: %w", err)
 	}
 
-	detail := fmt.Sprintf("moved to %s", newLoc.Code)
+	detail := fmt.Sprintf("moved to %s", newLoc.LocationTag)
 	if item.LocationID != nil {
 		if oldLoc, err := s.GetLocationByID(ctx, *item.LocationID); err == nil {
-			detail = fmt.Sprintf("moved to %s (was %s)", newLoc.Code, oldLoc.Code)
+			detail = fmt.Sprintf("moved to %s (was %s)", newLoc.LocationTag, oldLoc.LocationTag)
 		}
 	}
 

@@ -31,11 +31,11 @@ type itemDetailResponse struct {
 	AssetTag            string              `json:"asset_tag"`
 	Description         string              `json:"description"`
 	LocationID          *int64              `json:"location_id,omitempty"`
-	LocationCode        string              `json:"location_code,omitempty"`
+	LocationTag         string              `json:"location_tag,omitempty"`
 	LocationDescription string              `json:"location_description,omitempty"`
 	Images              []itemImageResponse `json:"images"`
 	Activity            []activityResponse  `json:"activity"`
-	Tags                []tagResponse       `json:"tags"`
+	Labels              []labelResponse     `json:"labels"`
 }
 
 func toActivityResponse(a domain.Activity) activityResponse {
@@ -78,10 +78,10 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		imageResponses = append(imageResponses, itemImageResponse{ID: img.ID, Description: img.Description, SortOrder: img.SortOrder})
 	}
 
-	var locationCode, locationDescription string
+	var locationTag, locationDescription string
 	if item.LocationID != nil {
 		if loc, err := s.store.GetLocationByID(ctx, *item.LocationID); err == nil {
-			locationCode = loc.Code
+			locationTag = loc.LocationTag
 			locationDescription = loc.Description
 		}
 	}
@@ -96,7 +96,7 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		activityResponses = append(activityResponses, toActivityResponse(a))
 	}
 
-	tags, err := s.store.ListTagsByItem(ctx, id)
+	labels, err := s.store.ListLabelsByItem(ctx, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -107,11 +107,11 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		AssetTag:            item.AssetTag,
 		Description:         item.Description,
 		LocationID:          item.LocationID,
-		LocationCode:        locationCode,
+		LocationTag:         locationTag,
 		LocationDescription: locationDescription,
 		Images:              imageResponses,
 		Activity:            activityResponses,
-		Tags:                toTagResponses(tags),
+		Labels:              toLabelResponses(labels),
 	})
 }
 

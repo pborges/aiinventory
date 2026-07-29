@@ -10,13 +10,13 @@ import (
 )
 
 type itemSummaryResponse struct {
-	ID                  int64         `json:"id"`
-	AssetTag            string        `json:"asset_tag"`
-	Description         string        `json:"description"`
-	LocationCode        string        `json:"location_code,omitempty"`
-	LocationDescription string        `json:"location_description,omitempty"`
-	PrimaryImageID      *int64        `json:"primary_image_id,omitempty"`
-	Tags                []tagResponse `json:"tags"`
+	ID                  int64           `json:"id"`
+	AssetTag            string          `json:"asset_tag"`
+	Description         string          `json:"description"`
+	LocationTag         string          `json:"location_tag,omitempty"`
+	LocationDescription string          `json:"location_description,omitempty"`
+	PrimaryImageID      *int64          `json:"primary_image_id,omitempty"`
+	Labels              []labelResponse `json:"labels"`
 }
 
 // handleSearch implements the Search view (README flow #3): a free-text
@@ -37,21 +37,21 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		params.LocationID = &id
 	}
-	for _, v := range q["tag_id"] {
+	for _, v := range q["label_id"] {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid tag_id")
+			writeError(w, http.StatusBadRequest, "invalid label_id")
 			return
 		}
-		params.TagIDs = append(params.TagIDs, id)
+		params.LabelIDs = append(params.LabelIDs, id)
 	}
-	for _, v := range q["location_tag_id"] {
+	for _, v := range q["location_label_id"] {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid location_tag_id")
+			writeError(w, http.StatusBadRequest, "invalid location_label_id")
 			return
 		}
-		params.LocationTagIDs = append(params.LocationTagIDs, id)
+		params.LocationLabelIDs = append(params.LocationLabelIDs, id)
 	}
 
 	results, err := s.store.SearchItems(r.Context(), params)
@@ -66,10 +66,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			ID:                  it.ID,
 			AssetTag:            it.AssetTag,
 			Description:         it.Description,
-			LocationCode:        it.LocationCode,
+			LocationTag:         it.LocationTag,
 			LocationDescription: it.LocationDescription,
 			PrimaryImageID:      it.PrimaryImageID,
-			Tags:                toTagResponses(it.Tags),
+			Labels:              toLabelResponses(it.Labels),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})

@@ -10,7 +10,7 @@ import (
 )
 
 type fakeReconcileStore struct {
-	locationsByCode map[string]domain.Location
+	locationsByTag  map[string]domain.Location
 	locationsByID   map[int64]domain.Location
 	itemsByTag      map[string]domain.Item
 	itemsByLocation map[int64][]domain.Item
@@ -18,16 +18,16 @@ type fakeReconcileStore struct {
 
 func newFakeReconcileStore() *fakeReconcileStore {
 	return &fakeReconcileStore{
-		locationsByCode: map[string]domain.Location{},
+		locationsByTag:  map[string]domain.Location{},
 		locationsByID:   map[int64]domain.Location{},
 		itemsByTag:      map[string]domain.Item{},
 		itemsByLocation: map[int64][]domain.Item{},
 	}
 }
 
-func (f *fakeReconcileStore) addLocation(id int64, code string) domain.Location {
-	loc := domain.Location{ID: id, Code: code}
-	f.locationsByCode[code] = loc
+func (f *fakeReconcileStore) addLocation(id int64, locationTag string) domain.Location {
+	loc := domain.Location{ID: id, LocationTag: locationTag}
+	f.locationsByTag[locationTag] = loc
 	f.locationsByID[id] = loc
 	return loc
 }
@@ -41,8 +41,8 @@ func (f *fakeReconcileStore) addItem(tag string, locationID *int64) domain.Item 
 	return it
 }
 
-func (f *fakeReconcileStore) GetLocationByCode(_ context.Context, code string) (domain.Location, error) {
-	loc, ok := f.locationsByCode[code]
+func (f *fakeReconcileStore) GetLocationByLocationTag(_ context.Context, locationTag string) (domain.Location, error) {
+	loc, ok := f.locationsByTag[locationTag]
 	if !ok {
 		return domain.Location{}, store.ErrNotFound
 	}

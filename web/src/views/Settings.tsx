@@ -3,12 +3,25 @@ import { api, ApiError, type Settings as SettingsData, type UserListItem } from 
 import { currentUser } from '../state/auth'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
-import { TagManagerSection } from '../components/TagManagerSection'
+import { LabelManagerSection } from '../components/LabelManagerSection'
+import { RegisteredTagsSection } from '../components/RegisteredTagsSection'
 
 interface RouteProps {
   path?: string
   default?: boolean
 }
+
+type SettingsSection = 'gemini' | 'users' | 'asset-tags' | 'location-tags'
+
+const SETTINGS_SECTIONS: { key: SettingsSection; label: string }[] = [
+  { key: 'gemini', label: 'Gemini configuration' },
+  { key: 'users', label: 'Users' },
+  { key: 'asset-tags', label: 'Asset Tags' },
+  { key: 'location-tags', label: 'Location Tags' },
+]
+
+const ASSET_TAG_PATTERN = /^[A-Z]{4}$/
+const LOCATION_TAG_PATTERN = /^@[A-Z]{3}$/
 
 const PROMPT_TYPES: { key: string; label: string }[] = [
   { key: 'tag_capture', label: 'Tag capture' },
@@ -29,6 +42,7 @@ const MODEL_SUGGESTIONS = [
 ]
 
 export function Settings(_props: RouteProps) {
+  const [section, setSection] = useState<SettingsSection>('gemini')
   const [data, setData] = useState<SettingsData | null>(null)
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('')
@@ -133,140 +147,185 @@ export function Settings(_props: RouteProps) {
     <div class="settings-view">
       <Header active="settings" />
 
-      <div class="settings-content">
-        {!data ? (
-          <p>Loading…</p>
-        ) : (
-          <>
-            <h1>Settings</h1>
+      {!data ? (
+        <p class="settings-loading">Loading…</p>
+      ) : (
+        <div class="sidebar-page-layout">
+          <aside class="sidebar-page-sidebar">
+            <h2>Settings</h2>
+            <ul>
+              {SETTINGS_SECTIONS.map(({ key, label }) => (
+                <li
+                  key={key}
+                  class={'settings-nav-item' + (section === key ? ' settings-nav-item-active' : '')}
+                  onClick={() => setSection(key)}
+                >
+                  {label}
+                </li>
+              ))}
+            </ul>
+          </aside>
 
-            <form class="settings-form" onSubmit={onSave}>
-              <section>
-                <h2>Gemini configuration</h2>
-                <label class="settings-field">
-                  API key
-                  <input
-                    type="password"
-                    autocomplete="off"
-                    value={apiKey}
-                    placeholder={data.gemini_api_key_set ? 'Configured — enter a new key to replace it' : 'Not configured'}
-                    onInput={(e) => setApiKey((e.target as HTMLInputElement).value)}
-                  />
-                </label>
-                {data.gemini_api_key_set && (
-                  <button type="button" class="link-button" onClick={onClearApiKey} disabled={status === 'saving'}>
-                    Clear API key
-                  </button>
-                )}
-
-                <label class="settings-field">
-                  Model
-                  <input
-                    list="model-suggestions"
-                    value={model}
-                    placeholder={data.gemini_model_default}
-                    onInput={(e) => setModel((e.target as HTMLInputElement).value)}
-                  />
-                  <datalist id="model-suggestions">
-                    {MODEL_SUGGESTIONS.map((m) => (
-                      <option value={m} key={m} />
-                    ))}
-                  </datalist>
-                </label>
-
-                {PROMPT_TYPES.map(({ key, label }) => (
-                  <div class="settings-field" key={key}>
-                    <label>
-                      {label} prompt override
-                      <textarea
-                        rows={4}
-                        value={overrides[key] ?? ''}
-                        placeholder="Leave empty to use the built-in default"
-                        onInput={(e) => setOverrides({ ...overrides, [key]: (e.target as HTMLTextAreaElement).value })}
+          <main class="sidebar-page-main">
+            <div class="settings-content">
+              {section === 'gemini' && (
+                <form class="settings-form" onSubmit={onSave}>
+                  <section>
+                    <h2>Gemini configuration</h2>
+                    <label class="settings-field">
+                      API key
+                      <input
+                        type="password"
+                        autocomplete="off"
+                        value={apiKey}
+                        placeholder={data.gemini_api_key_set ? 'Configured — enter a new key to replace it' : 'Not configured'}
+                        onInput={(e) => setApiKey((e.target as HTMLInputElement).value)}
                       />
                     </label>
-                    <button type="button" class="link-button" onClick={() => showDefault(key)}>
-                      View default prompt
+                    {data.gemini_api_key_set && (
+                      <button type="button" class="link-button" onClick={onClearApiKey} disabled={status === 'saving'}>
+                        Clear API key
+                      </button>
+                    )}
+
+                    <label class="settings-field">
+                      Model
+                      <input
+                        list="model-suggestions"
+                        value={model}
+                        placeholder={data.gemini_model_default}
+                        onInput={(e) => setModel((e.target as HTMLInputElement).value)}
+                      />
+                      <datalist id="model-suggestions">
+                        {MODEL_SUGGESTIONS.map((m) => (
+                          <option value={m} key={m} />
+                        ))}
+                      </datalist>
+                    </label>
+
+                    {PROMPT_TYPES.map(({ key, label }) => (
+                      <div class="settings-field" key={key}>
+                        <label>
+                          {label} prompt override
+                          <textarea
+                            rows={4}
+                            value={overrides[key] ?? ''}
+                            placeholder="Leave empty to use the built-in default"
+                            onInput={(e) => setOverrides({ ...overrides, [key]: (e.target as HTMLTextAreaElement).value })}
+                          />
+                        </label>
+                        <button type="button" class="link-button" onClick={() => showDefault(key)}>
+                          View default prompt
+                        </button>
+                      </div>
+                    ))}
+                  </section>
+
+                  <div class="settings-actions">
+                    <button type="submit" class="btn-primary" disabled={status === 'saving'}>
+                      Save
                     </button>
+                    {status === 'saved' && <span class="settings-status">Saved</span>}
+                    {errorMsg && <span class="settings-status settings-status-error">{errorMsg}</span>}
                   </div>
-                ))}
-              </section>
+                </form>
+              )}
 
-              <div class="settings-actions">
-                <button type="submit" class="btn-primary" disabled={status === 'saving'}>
-                  Save
-                </button>
-                {status === 'saved' && <span class="settings-status">Saved</span>}
-                {errorMsg && <span class="settings-status settings-status-error">{errorMsg}</span>}
-              </div>
-            </form>
+              {section === 'users' && (
+                <section class="settings-users">
+                  <h2>Users</h2>
+                  <p class="settings-users-note">
+                    No admin/non-admin distinction yet — any logged-in, enabled user can manage every account.
+                  </p>
 
-            <section class="settings-users">
-              <h2>Users</h2>
-              <p class="settings-users-note">
-                No admin/non-admin distinction yet — any logged-in, enabled user can manage every account.
-              </p>
+                  <ul class="settings-user-list">
+                    {users === null && <li>Loading…</li>}
+                    {users?.map((u) => (
+                      <li class="settings-user-row" key={u.id}>
+                        <span class="settings-user-name">
+                          {u.username}
+                          {u.id === currentUser.value?.id && ' (you)'}
+                        </span>
+                        <span class={u.enabled ? 'settings-user-status-enabled' : 'settings-user-status-disabled'}>
+                          {u.enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                        <button type="button" onClick={() => onToggleEnabled(u)} disabled={userBusy}>
+                          {u.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
 
-              <ul class="settings-user-list">
-                {users === null && <li>Loading…</li>}
-                {users?.map((u) => (
-                  <li class="settings-user-row" key={u.id}>
-                    <span class="settings-user-name">
-                      {u.username}
-                      {u.id === currentUser.value?.id && ' (you)'}
-                    </span>
-                    <span class={u.enabled ? 'settings-user-status-enabled' : 'settings-user-status-disabled'}>
-                      {u.enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                    <button type="button" onClick={() => onToggleEnabled(u)} disabled={userBusy}>
-                      {u.enabled ? 'Disable' : 'Enable'}
+                  <form class="settings-new-user-form" onSubmit={onCreateUser}>
+                    <input
+                      placeholder="Username"
+                      value={newUsername}
+                      onInput={(e) => setNewUsername((e.target as HTMLInputElement).value)}
+                      required
+                    />
+                    <input
+                      type="password"
+                      placeholder="Password"
+                      value={newPassword}
+                      onInput={(e) => setNewPassword((e.target as HTMLInputElement).value)}
+                      minLength={8}
+                      required
+                    />
+                    <button type="submit" class="btn-primary" disabled={userBusy}>
+                      Add user
                     </button>
-                  </li>
-                ))}
-              </ul>
+                  </form>
+                  {userError && <p class="settings-status settings-status-error">{userError}</p>}
+                </section>
+              )}
 
-              <form class="settings-new-user-form" onSubmit={onCreateUser}>
-                <input
-                  placeholder="Username"
-                  value={newUsername}
-                  onInput={(e) => setNewUsername((e.target as HTMLInputElement).value)}
-                  required
-                />
-                <input
-                  type="password"
-                  placeholder="Password"
-                  value={newPassword}
-                  onInput={(e) => setNewPassword((e.target as HTMLInputElement).value)}
-                  minLength={8}
-                  required
-                />
-                <button type="submit" class="btn-primary" disabled={userBusy}>
-                  Add user
-                </button>
-              </form>
-              {userError && <p class="settings-status settings-status-error">{userError}</p>}
-            </section>
+              {section === 'asset-tags' && (
+                <>
+                  <LabelManagerSection
+                    title="Labels"
+                    deleteWarningTarget="item"
+                    list={api.listItemLabels}
+                    create={api.createItemLabel}
+                    update={api.updateItemLabel}
+                    remove={api.deleteItemLabel}
+                  />
+                  <RegisteredTagsSection
+                    title="Registered Tags"
+                    pattern={ASSET_TAG_PATTERN}
+                    placeholder="ABCD"
+                    list={api.listRegisteredAssetTags}
+                    create={api.createRegisteredAssetTag}
+                    remove={api.deleteRegisteredAssetTag}
+                    upload={api.uploadRegisteredAssetTags}
+                  />
+                </>
+              )}
 
-            <TagManagerSection
-              title="Tags"
-              deleteWarningTarget="item"
-              list={api.listTags}
-              create={api.createTag}
-              update={api.updateTag}
-              remove={api.deleteTag}
-            />
-
-            <TagManagerSection
-              title="Location tags"
-              deleteWarningTarget="location"
-              list={api.listLocationTags}
-              create={api.createLocationTag}
-              update={api.updateLocationTag}
-              remove={api.deleteLocationTag}
-            />
-          </>
-        )}
-      </div>
+              {section === 'location-tags' && (
+                <>
+                  <LabelManagerSection
+                    title="Labels"
+                    deleteWarningTarget="location"
+                    list={api.listLocationLabels}
+                    create={api.createLocationLabel}
+                    update={api.updateLocationLabel}
+                    remove={api.deleteLocationLabel}
+                  />
+                  <RegisteredTagsSection
+                    title="Registered Tags"
+                    pattern={LOCATION_TAG_PATTERN}
+                    placeholder="@ABC"
+                    list={api.listRegisteredLocationTags}
+                    create={api.createRegisteredLocationTag}
+                    remove={api.deleteRegisteredLocationTag}
+                    upload={api.uploadRegisteredLocationTags}
+                  />
+                </>
+              )}
+            </div>
+          </main>
+        </div>
+      )}
 
       <dialog ref={dialogRef} class="prompt-shadowbox">
         <pre>{shadowboxText}</pre>

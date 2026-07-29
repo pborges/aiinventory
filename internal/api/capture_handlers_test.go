@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -13,13 +14,13 @@ import (
 	"github.com/pborges/aiinventory/internal/store"
 )
 
-func newTestServerWithGemini(t *testing.T, g gemini.Client) (http.Handler, []*http.Cookie) {
+func newTestServerWithGemini(t *testing.T, g gemini.Client) (http.Handler, []*http.Cookie, *store.Store) {
 	t.Helper()
 	s := store.NewTestStore(t)
 	codec := auth.NewCodec("test-secret")
 	h := New(s, codec, g, "")
 	w := doJSON(t, h, http.MethodPost, "/api/auth/bootstrap", credentials{Username: "alice", Password: "correcthorse"}, nil)
-	return h, w.Result().Cookies()
+	return h, w.Result().Cookies(), s
 }
 
 // doCaptureUpload is the composite convenience helper every OTHER test file
@@ -39,10 +40,37 @@ func doCaptureUpload(t *testing.T, h http.Handler, cookies []*http.Cookie, image
 		// for callers that expect "no tag" to just inspect .HasAssetTag
 		return previewResp
 	}
+	assetTag := preview.AssetTag
+	if preview.NeedsResolution {
+		// No confident registry match yet (a genuinely new tag that hasn't
+		// been bulk-imported) — mirror what an operator would do: accept
+		// the raw read as-is. It self-heals into the registry on apply.
+		assetTag = preview.RawAssetTag
+	}
 	return doMultipartUpload(t, h, "/api/capture/apply", cookies, imageBytes, map[string]string{
-		"asset_tag":   preview.AssetTag,
+		"asset_tag":   assetTag,
 		"description": preview.ImageDescription,
 	})
+}
+
+// registerTestTag registers tag in the tag registry directly against the
+// test store, so preview handlers see it as a known tag — mirrors what the
+// external label-printing script's import would do before a tag is ever
+// scanned.
+func registerTestTag(t *testing.T, s *store.Store, tag string) {
+	t.Helper()
+	if err := s.RegisterAssetTag(context.Background(), tag); err != nil {
+		t.Fatalf("registerTestTag(%q): %v", tag, err)
+	}
+}
+
+// registerTestLocationTag mirrors registerTestTag for the location-tag
+// registry.
+func registerTestLocationTag(t *testing.T, s *store.Store, tag string) {
+	t.Helper()
+	if err := s.RegisterLocationTag(context.Background(), tag); err != nil {
+		t.Fatalf("registerTestLocationTag(%q): %v", tag, err)
+	}
 }
 
 func doMultipartUpload(t *testing.T, h http.Handler, path string, cookies []*http.Cookie, imageBytes []byte, fields map[string]string) *httptest.ResponseRecorder {
@@ -74,7 +102,7 @@ func doMultipartUpload(t *testing.T, h http.Handler, path string, cookies []*htt
 }
 
 func TestCapturePreviewWithoutGeminiConfigured(t *testing.T) {
-	h, cookies := newTestServerWithGemini(t, nil)
+	h, cookies, _ := newTestServerWithGemini(t, nil)
 	w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("fake-jpeg"), nil)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", w.Code)
@@ -85,7 +113,7 @@ func TestCapturePreviewDoesNotWriteToStore(t *testing.T) {
 	fake := &gemini.Fake{
 		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI", ItemGuess: "cordless drill", Description: "S/N 12345"},
 	}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("fake-jpeg-bytes"), nil)
 	if w.Code != http.StatusOK {
@@ -95,7 +123,10 @@ func TestCapturePreviewDoesNotWriteToStore(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&preview); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if !preview.HasAssetTag || preview.AssetTag != "ZKEI" || !preview.ItemWillBeNew {
+	// ZKEI isn't in the (empty) tag registry yet, so this preview can't
+	// confidently resolve it — it comes back needing operator resolution
+	// rather than pre-filled, which is itself proof nothing was written.
+	if !preview.HasAssetTag || preview.RawAssetTag != "ZKEI" || !preview.NeedsResolution {
 		t.Fatalf("unexpected preview: %+v", preview)
 	}
 	if preview.ItemGuess != "cordless drill" {
@@ -117,7 +148,7 @@ func TestCaptureApplyCreatesNewItem(t *testing.T) {
 	fake := &gemini.Fake{
 		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI", ItemGuess: "cordless drill", Description: "S/N 12345"},
 	}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	w := doMultipartUpload(t, h, "/api/capture/apply", cookies, []byte("fake-jpeg-bytes"), map[string]string{
 		"asset_tag":   "ZKEI",
@@ -136,7 +167,7 @@ func TestCaptureApplyCreatesNewItem(t *testing.T) {
 }
 
 func TestCaptureApplyRejectsInvalidAssetTag(t *testing.T) {
-	h, cookies := newTestServerWithGemini(t, nil) // apply doesn't need gemini configured
+	h, cookies, _ := newTestServerWithGemini(t, nil) // apply doesn't need gemini configured
 	w := doMultipartUpload(t, h, "/api/capture/apply", cookies, []byte("photo"), map[string]string{
 		"asset_tag":   "not-valid",
 		"description": "",
@@ -150,7 +181,7 @@ func TestCaptureFullFlowAppendsOnSecondPhotoOfSameTag(t *testing.T) {
 	fake := &gemini.Fake{
 		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI", Description: "note"},
 	}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	first := doCaptureUpload(t, h, cookies, []byte("photo-1"))
 	var firstResp captureResponse
@@ -174,7 +205,7 @@ func TestCapturePreviewNoAssetTagFound(t *testing.T) {
 	fake := &gemini.Fake{
 		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: false},
 	}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("photo-with-no-tag"), nil)
 	if w.Code != http.StatusOK {
@@ -196,7 +227,7 @@ func TestCapturePreviewRejectsMalformedAssetTag(t *testing.T) {
 		fake := &gemini.Fake{
 			TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: tag},
 		}
-		h, cookies := newTestServerWithGemini(t, fake)
+		h, cookies, _ := newTestServerWithGemini(t, fake)
 
 		w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("photo"), nil)
 		if w.Code != http.StatusOK {
@@ -214,7 +245,7 @@ func TestCapturePreviewExistingItemNotFlaggedAsNew(t *testing.T) {
 	fake := &gemini.Fake{
 		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"},
 	}
-	h, cookies := newTestServerWithGemini(t, fake)
+	h, cookies, _ := newTestServerWithGemini(t, fake)
 
 	doCaptureUpload(t, h, cookies, []byte("photo-1")) // creates ZKEI
 
@@ -223,5 +254,101 @@ func TestCapturePreviewExistingItemNotFlaggedAsNew(t *testing.T) {
 	json.NewDecoder(w.Body).Decode(&preview)
 	if preview.ItemWillBeNew {
 		t.Fatalf("preview for an already-existing tag reported ItemWillBeNew = true")
+	}
+}
+
+func TestCapturePreviewExactRegistryMatchPassesThroughSilently(t *testing.T) {
+	fake := &gemini.Fake{
+		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "OORB"},
+	}
+	h, cookies, s := newTestServerWithGemini(t, fake)
+	registerTestTag(t, s, "OORB")
+
+	w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("photo"), nil)
+	var preview capturePreviewResponse
+	json.NewDecoder(w.Body).Decode(&preview)
+	if preview.NeedsResolution || preview.Corrected {
+		t.Fatalf("exact registry match required resolution: %+v", preview)
+	}
+	if preview.AssetTag != "OORB" {
+		t.Fatalf("AssetTag = %q, want OORB", preview.AssetTag)
+	}
+}
+
+func TestCapturePreviewFlagsCorrectedReadForConfirmation(t *testing.T) {
+	// The QORB -> OORB example: registry has only OORB, one letter off.
+	// This must NOT auto-apply — a single OCR read has no corroborating
+	// second signal, so even a unique distance-1 match still needs a
+	// human tap rather than silently merging into the existing tag.
+	fake := &gemini.Fake{
+		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "QORB"},
+	}
+	h, cookies, s := newTestServerWithGemini(t, fake)
+	registerTestTag(t, s, "OORB")
+
+	w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("photo"), nil)
+	var preview capturePreviewResponse
+	json.NewDecoder(w.Body).Decode(&preview)
+	if !preview.NeedsResolution || !preview.Corrected {
+		t.Fatalf("corrected read should still need resolution: %+v", preview)
+	}
+	if preview.AssetTag != "" {
+		t.Fatalf("AssetTag = %q, want empty until operator confirms", preview.AssetTag)
+	}
+	if len(preview.Candidates) != 1 || preview.Candidates[0] != "OORB" {
+		t.Fatalf("Candidates = %v, want [OORB]", preview.Candidates)
+	}
+	if preview.RawAssetTag != "QORB" {
+		t.Fatalf("RawAssetTag = %q, want QORB", preview.RawAssetTag)
+	}
+}
+
+func TestCapturePreviewFlagsAmbiguousRead(t *testing.T) {
+	fake := &gemini.Fake{
+		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "QORB"},
+	}
+	h, cookies, s := newTestServerWithGemini(t, fake)
+	registerTestTag(t, s, "OORB")
+	registerTestTag(t, s, "QIRB")
+
+	w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("photo"), nil)
+	var preview capturePreviewResponse
+	json.NewDecoder(w.Body).Decode(&preview)
+	if !preview.NeedsResolution || preview.Corrected {
+		t.Fatalf("tied candidates should be ambiguous, not corrected: %+v", preview)
+	}
+	if len(preview.Candidates) != 2 {
+		t.Fatalf("Candidates = %v, want 2 tied candidates", preview.Candidates)
+	}
+}
+
+func TestCapturePreviewFlagsNoMatchRead(t *testing.T) {
+	fake := &gemini.Fake{
+		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "QORB"},
+	}
+	h, cookies, s := newTestServerWithGemini(t, fake)
+	registerTestTag(t, s, "ZZZZ") // distance 4, no candidates
+
+	w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("photo"), nil)
+	var preview capturePreviewResponse
+	json.NewDecoder(w.Body).Decode(&preview)
+	if !preview.NeedsResolution || preview.Corrected || len(preview.Candidates) != 0 {
+		t.Fatalf("unmatched read = %+v, want NeedsResolution with no candidates", preview)
+	}
+}
+
+func TestCaptureApplySelfHealsRegistry(t *testing.T) {
+	fake := &gemini.Fake{
+		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"},
+	}
+	h, cookies, _ := newTestServerWithGemini(t, fake)
+
+	doCaptureUpload(t, h, cookies, []byte("photo-1")) // ZKEI starts unregistered, gets accepted as-read
+
+	w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("photo-2"), nil)
+	var preview capturePreviewResponse
+	json.NewDecoder(w.Body).Decode(&preview)
+	if preview.NeedsResolution || preview.AssetTag != "ZKEI" {
+		t.Fatalf("second preview of the same tag = %+v, want a silent exact match after self-healing", preview)
 	}
 }

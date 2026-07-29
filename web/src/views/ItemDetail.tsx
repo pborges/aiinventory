@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { route } from 'preact-router'
 import { faLocationDot, faXmark } from '@fortawesome/free-solid-svg-icons'
-import { api, ApiError, formatLocationCode, type ItemDetail as ItemDetailData, type Tag } from '../api/client'
+import { api, ApiError, formatLocationTag, type ItemDetail as ItemDetailData, type Label } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { Icon } from '../components/Icon'
-import { TagChip } from '../components/TagChip'
+import { LabelChip } from '../components/LabelChip'
 
 interface RouteProps {
   path?: string
@@ -33,15 +33,15 @@ export function ItemDetail({ id }: RouteProps) {
   const [deletingImageId, setDeletingImageId] = useState<number | null>(null)
   const [confirmingDeleteItem, setConfirmingDeleteItem] = useState(false)
   const [deletingItem, setDeletingItem] = useState(false)
-  const [allTags, setAllTags] = useState<Tag[]>([])
-  const [tagsBusy, setTagsBusy] = useState(false)
+  const [allLabels, setAllLabels] = useState<Label[]>([])
+  const [labelsBusy, setLabelsBusy] = useState(false)
   const dragIdRef = useRef<number | null>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
     if (!itemId || Number.isNaN(itemId)) return
     load()
-    api.listTags().then((res) => setAllTags(res.tags))
+    api.listItemLabels().then((res) => setAllLabels(res.labels))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemId])
 
@@ -58,24 +58,24 @@ export function ItemDetail({ id }: RouteProps) {
       .finally(() => setLoading(false))
   }
 
-  async function onToggleTag(tag: Tag) {
+  async function onToggleLabel(label: Label) {
     if (!detail) return
-    const current = new Set(detail.tags.map((t) => t.id))
-    if (current.has(tag.id)) current.delete(tag.id)
-    else current.add(tag.id)
+    const current = new Set(detail.labels.map((l) => l.id))
+    if (current.has(label.id)) current.delete(label.id)
+    else current.add(label.id)
     const nextIds = [...current]
 
     // optimistic toggle, then persist
-    setDetail({ ...detail, tags: allTags.filter((t) => current.has(t.id)) })
-    setTagsBusy(true)
+    setDetail({ ...detail, labels: allLabels.filter((l) => current.has(l.id)) })
+    setLabelsBusy(true)
     try {
-      const updated = await api.setItemTags(detail.id, nextIds)
+      const updated = await api.setItemLabels(detail.id, nextIds)
       setDetail(updated)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to update tags')
+      setError(err instanceof ApiError ? err.message : 'Failed to update labels')
       load()
     } finally {
-      setTagsBusy(false)
+      setLabelsBusy(false)
     }
   }
 
@@ -175,12 +175,12 @@ export function ItemDetail({ id }: RouteProps) {
           <>
             <div class="item-detail-header">
               <h1 class="item-detail-tag">{detail.asset_tag}</h1>
-              {detail.location_code && (
+              {detail.location_tag && (
                 <a
                   class="item-detail-location"
-                  href={`/search?location_id=${detail.location_id}&location_code=${encodeURIComponent(detail.location_code)}${detail.location_description ? `&location_description=${encodeURIComponent(detail.location_description)}` : ''}`}
+                  href={`/search?location_id=${detail.location_id}&location_tag=${encodeURIComponent(detail.location_tag)}${detail.location_description ? `&location_description=${encodeURIComponent(detail.location_description)}` : ''}`}
                 >
-                  <Icon icon={faLocationDot} /> {formatLocationCode(detail.location_code, detail.location_description)}
+                  <Icon icon={faLocationDot} /> {formatLocationTag(detail.location_tag, detail.location_description)}
                 </a>
               )}
 
@@ -203,14 +203,14 @@ export function ItemDetail({ id }: RouteProps) {
               )}
             </div>
 
-            <div class="tag-cloud item-detail-tags">
-              {allTags.length === 0 && <p class="item-detail-tags-empty">No tags yet — create some in Settings.</p>}
-              {allTags.map((tag) => (
-                <TagChip
-                  key={tag.id}
-                  tag={tag}
-                  selected={detail.tags.some((t) => t.id === tag.id)}
-                  onClick={() => !tagsBusy && onToggleTag(tag)}
+            <div class="label-cloud item-detail-labels">
+              {allLabels.length === 0 && <p class="item-detail-labels-empty">No labels yet — create some in Settings.</p>}
+              {allLabels.map((label) => (
+                <LabelChip
+                  key={label.id}
+                  label={label}
+                  selected={detail.labels.some((l) => l.id === label.id)}
+                  onClick={() => !labelsBusy && onToggleLabel(label)}
                 />
               ))}
             </div>

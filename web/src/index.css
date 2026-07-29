@@ -717,6 +717,51 @@ a.capture-result-tag:hover {
   opacity: 0.7;
 }
 
+.capture-tag-resolver-hint {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+}
+
+.capture-tag-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.capture-tag-choice {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 1rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.capture-tag-choice-active {
+  background: color-mix(in srgb, var(--accent-blue) 18%, transparent);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+.capture-tag-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.capture-tag-manual input {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 1rem;
+  text-transform: uppercase;
+  padding: 0.35rem 0.5rem;
+  width: 6rem;
+}
+
 @media (min-width: 800px) {
   .camera-square {
     max-width: min(420px, 55dvh);
@@ -881,11 +926,10 @@ a.capture-result-tag:hover {
   padding: 0.5rem 0.6rem;
 }
 
-.tag-review-card label {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  cursor: pointer;
+.tag-review-card-header {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  margin-bottom: 0.4rem;
 }
 
 .tag-review-tag {
@@ -894,12 +938,78 @@ a.capture-result-tag:hover {
   font-weight: 600;
 }
 
+.tag-review-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.tag-review-choice {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tag-review-choice-active {
+  background: color-mix(in srgb, var(--accent-blue) 18%, transparent);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+.tag-review-choice-exclude {
+  font-family: inherit;
+}
+
+.tag-review-choice-exclude.tag-review-choice-active {
+  background: color-mix(in srgb, var(--accent-pink) 18%, transparent);
+  border-color: var(--accent-pink);
+  color: var(--accent-pink);
+}
+
+.tag-review-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.tag-review-manual input {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  padding: 0.3rem 0.5rem;
+  width: 6rem;
+}
+
 /* --- settings (desktop-oriented, see README) --- */
+
+.settings-loading {
+  padding: 1.5rem 1rem;
+}
+
+.settings-nav-item {
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.settings-nav-item-active {
+  background: color-mix(in srgb, var(--accent-blue) 18%, transparent);
+  color: var(--accent-blue);
+  font-weight: 600;
+}
 
 .settings-content {
   max-width: 720px;
   margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
+  padding: 0 1rem 3rem;
 }
 
 .settings-form section {
@@ -948,12 +1058,6 @@ a.capture-result-tag:hover {
 .settings-status-error {
   color: var(--accent-pink);
   opacity: 1;
-}
-
-.settings-users {
-  margin-top: 2.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
 }
 
 .settings-users-note {
@@ -1132,11 +1236,11 @@ a.capture-result-tag:hover {
   cursor: pointer;
 }
 
-.item-detail-tags {
+.item-detail-labels {
   margin-top: 0.75rem;
 }
 
-.item-detail-tags-empty {
+.item-detail-labels-empty {
   font-size: 0.85rem;
   opacity: 0.7;
   margin: 0;
@@ -1264,12 +1368,12 @@ a.capture-result-tag:hover {
 
 /* --- location view (desktop, README flow #4) --- */
 
-.location-layout {
+.sidebar-page-layout {
   display: flex;
   min-height: calc(100dvh - 3.5rem);
 }
 
-.location-sidebar {
+.sidebar-page-sidebar {
   width: fit-content;
   min-width: 12rem;
   max-width: 20rem;
@@ -1278,16 +1382,16 @@ a.capture-result-tag:hover {
   padding: 1rem;
 }
 
-.location-sidebar h2 {
+.sidebar-page-sidebar h2 {
   font-size: 1rem;
   margin-top: 0;
 }
 
-.location-sidebar-tag-filter {
+.location-sidebar-label-filter {
   margin-bottom: 0.75rem;
 }
 
-.location-sidebar ul {
+.sidebar-page-sidebar ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -1302,7 +1406,7 @@ a.capture-result-tag:hover {
   cursor: pointer;
 }
 
-.location-sidebar-code {
+.location-sidebar-tag {
   font-family: ui-monospace, Consolas, monospace;
 }
 
@@ -1330,7 +1434,7 @@ a.capture-result-tag:hover {
   cursor: default;
 }
 
-.location-main {
+.sidebar-page-main {
   flex: 1;
   min-width: 0;
   padding: 1.5rem;
@@ -1354,11 +1458,11 @@ a.capture-result-tag:hover {
   max-width: 24rem;
 }
 
-.location-tags-editor {
+.location-labels-editor {
   margin: 0 0 1.25rem;
 }
 
-.location-tags-empty {
+.location-labels-empty {
   font-size: 0.85rem;
   opacity: 0.7;
   margin: 0;
@@ -1618,11 +1722,11 @@ a.capture-result-tag:hover {
   white-space: nowrap;
 }
 
-/* --- tags: chips (--tag-color custom prop drives the color-mix), the
+/* --- tags: chips (--label-color custom prop drives the color-mix), the
    toggle-cloud shared by Search's filter row and the item detail editor,
    and the Settings tag-management section --- */
 
-.tag-chip {
+.label-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -1631,32 +1735,32 @@ a.capture-result-tag:hover {
   line-height: 1.2;
   padding: 0.15rem 0.55rem;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--tag-color) 55%, transparent);
-  background: color-mix(in srgb, var(--tag-color) 18%, transparent);
-  color: var(--tag-color);
+  border: 1px solid color-mix(in srgb, var(--label-color) 55%, transparent);
+  background: color-mix(in srgb, var(--label-color) 18%, transparent);
+  color: var(--label-color);
   white-space: nowrap;
 }
 
-button.tag-chip {
+button.label-chip {
   cursor: pointer;
   transition: background-color 0.15s ease, opacity 0.15s ease;
 }
 
-button.tag-chip:hover {
-  background: color-mix(in srgb, var(--tag-color) 28%, transparent);
+button.label-chip:hover {
+  background: color-mix(in srgb, var(--label-color) 28%, transparent);
 }
 
-.tag-chip-unselected {
+.label-chip-unselected {
   background: transparent;
-  border-color: color-mix(in srgb, var(--tag-color) 35%, transparent);
+  border-color: color-mix(in srgb, var(--label-color) 35%, transparent);
   opacity: 0.6;
 }
 
-.tag-chip-unselected:hover {
+.label-chip-unselected:hover {
   opacity: 0.85;
 }
 
-.tag-chip-remove {
+.label-chip-remove {
   display: inline-flex;
   align-items: center;
   background: none;
@@ -1669,18 +1773,18 @@ button.tag-chip:hover {
   cursor: pointer;
 }
 
-.tag-cloud {
+.label-cloud {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
 }
 
-.search-tag-filter {
+.search-label-filter {
   flex-shrink: 0;
 }
 
-.search-tag-filters-card {
+.search-label-filters-card {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
@@ -1689,13 +1793,13 @@ button.tag-chip:hover {
   padding: 0.85rem 1rem;
 }
 
-.search-tag-filters-section {
+.search-label-filters-section {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
 
-.search-tag-filters-label {
+.search-label-filters-label {
   margin: 0;
   font-size: 0.65rem;
   font-weight: 600;
@@ -1704,20 +1808,20 @@ button.tag-chip:hover {
   opacity: 0.75;
 }
 
-.item-card-tags {
+.item-card-labels {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.3rem;
 }
 
-.tag-color-picker {
+.label-color-picker {
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
 
-.tag-color-swatch {
+.label-color-swatch {
   width: 1.5rem;
   height: 1.5rem;
   padding: 0;
@@ -1727,11 +1831,11 @@ button.tag-chip:hover {
   cursor: pointer;
 }
 
-.tag-color-swatch-selected {
+.label-color-swatch-selected {
   border-color: var(--fg);
 }
 
-.tag-color-custom {
+.label-color-custom {
   width: 2rem;
   height: 1.5rem;
   padding: 0;
@@ -1741,13 +1845,7 @@ button.tag-chip:hover {
   cursor: pointer;
 }
 
-.settings-tags {
-  margin-top: 2.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-}
-
-.settings-tag-list {
+.settings-label-list {
   list-style: none;
   margin: 0 0 1rem;
   padding: 0;
@@ -1756,42 +1854,107 @@ button.tag-chip:hover {
   gap: 0.5rem;
 }
 
-.settings-tag-row {
+.settings-label-row {
   display: flex;
   align-items: center;
   gap: 0.6rem;
 }
 
-.settings-tag-row-name-input {
+.settings-label-row-name-input {
   font: inherit;
   padding: 0.3rem 0.5rem;
 }
 
-.settings-tag-row-actions {
+.settings-label-row-actions {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 0.4rem;
 }
 
-.settings-tag-row-actions button {
+.settings-label-row-actions button {
   padding: 0.3rem 0.7rem;
   cursor: pointer;
 }
 
-.settings-new-tag-form {
+.settings-new-label-form {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
 
-.settings-new-tag-form input[type='text'] {
+.settings-new-label-form input[type='text'] {
   padding: 0.4rem;
   font: inherit;
 }
 
-.settings-new-tag-form button {
+.settings-new-label-form button {
   padding: 0.4rem 1rem;
   cursor: pointer;
 }
+
+.settings-registry {
+  margin-top: 2rem;
+}
+
+.settings-registry-list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.settings-registry-empty {
+  opacity: 0.7;
+}
+
+.settings-registry-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.2rem 0.3rem 0.2rem 0.7rem;
+}
+
+.settings-registry-tag {
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.settings-registry-row button {
+  padding: 0.15rem 0.55rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.settings-new-registry-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.settings-new-registry-form input[type='text'] {
+  padding: 0.4rem;
+  font: inherit;
+  font-family: monospace;
+  width: 8rem;
+}
+
+.settings-new-registry-form button {
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+}
+
+.settings-registry-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+

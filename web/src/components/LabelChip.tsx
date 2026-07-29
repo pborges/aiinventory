@@ -1,34 +1,34 @@
 import { faXmark } from '@fortawesome/free-solid-svg-icons'
-import type { Tag } from '../api/client'
+import type { Label } from '../api/client'
 import { Icon } from './Icon'
 
 interface Props {
-  tag: Tag
+  label: Label
   selected?: boolean
   onClick?: () => void
   onRemove?: () => void
 }
 
-/** A colored pill for one tag, driven by --tag-color (see index.css's
- * .tag-chip rules) so every rendering context — cards, toggle-clouds,
+/** A colored pill for one label, driven by --label-color (see index.css's
+ * .label-chip rules) so every rendering context — cards, toggle-clouds,
  * the Settings list — shares one color-mix-based look. */
-export function TagChip({ tag, selected, onClick, onRemove }: Props) {
+export function LabelChip({ label, selected, onClick, onRemove }: Props) {
   const interactive = !!onClick
   const As = interactive ? 'button' : 'span'
 
   return (
     <As
       type={interactive ? 'button' : undefined}
-      class={`tag-chip${selected === false ? ' tag-chip-unselected' : ''}${selected ? ' tag-chip-selected' : ''}`}
-      style={{ '--tag-color': tag.color }}
+      class={`label-chip${selected === false ? ' label-chip-unselected' : ''}${selected ? ' label-chip-selected' : ''}`}
+      style={{ '--label-color': label.color }}
       onClick={onClick}
     >
-      {tag.name}
+      {label.name}
       {onRemove && (
         <button
           type="button"
-          class="tag-chip-remove"
-          aria-label={`Remove ${tag.name}`}
+          class="label-chip-remove"
+          aria-label={`Remove ${label.name}`}
           onClick={(e) => {
             e.stopPropagation()
             onRemove()

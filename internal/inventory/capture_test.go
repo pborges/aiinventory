@@ -12,11 +12,12 @@ import (
 // fakeCaptureStore is a minimal in-memory implementation of CaptureStore,
 // hand-rolled per the project's "no mocking library" testing convention.
 type fakeCaptureStore struct {
-	itemsByTag map[string]domain.Item
-	nextItemID int64
-	images     []domain.Image
-	nextImgID  int64
-	activity   []loggedActivity
+	itemsByTag    map[string]domain.Item
+	nextItemID    int64
+	images        []domain.Image
+	nextImgID     int64
+	activity      []loggedActivity
+	registeredTag []string
 }
 
 type loggedActivity struct {
@@ -53,6 +54,11 @@ func (f *fakeCaptureStore) AddImage(_ context.Context, itemID int64, data []byte
 
 func (f *fakeCaptureStore) LogActivity(_ context.Context, userID int64, action domain.ActivityAction, itemID, _ *int64, _ string) error {
 	f.activity = append(f.activity, loggedActivity{userID: userID, action: action, itemID: itemID})
+	return nil
+}
+
+func (f *fakeCaptureStore) RegisterAssetTag(_ context.Context, tag string) error {
+	f.registeredTag = append(f.registeredTag, tag)
 	return nil
 }
 
@@ -96,6 +102,16 @@ func TestCaptureAppendsToExistingItem(t *testing.T) {
 	}
 	if s.activity[1].action != domain.ActivityImageAdded {
 		t.Errorf("second activity action = %q, want image_added", s.activity[1].action)
+	}
+}
+
+func TestCaptureSelfHealsRegistry(t *testing.T) {
+	s := newFakeCaptureStore()
+	if _, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123"); err != nil {
+		t.Fatalf("Capture: %v", err)
+	}
+	if len(s.registeredTag) != 1 || s.registeredTag[0] != "ZKEI" {
+		t.Fatalf("registeredTag = %v, want [ZKEI]", s.registeredTag)
 	}
 }
 

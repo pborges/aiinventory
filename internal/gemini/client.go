@@ -80,16 +80,16 @@ func (g *GenAIClient) AnalyzeTagCapture(ctx context.Context, model, prompt strin
 var reconciliationSchema = &genai.Schema{
 	Type: genai.TypeObject,
 	Properties: map[string]*genai.Schema{
-		"has_location_code": {Type: genai.TypeBoolean},
-		"location_code":     {Type: genai.TypeString},
-		"asset_tags":        {Type: genai.TypeArray, Items: &genai.Schema{Type: genai.TypeString}},
+		"has_location_tag": {Type: genai.TypeBoolean},
+		"location_tag":     {Type: genai.TypeString},
+		"asset_tags":       {Type: genai.TypeArray, Items: &genai.Schema{Type: genai.TypeString}},
 		"suggested_rotation": {
 			Type:   genai.TypeString,
 			Format: "enum",
 			Enum:   []string{"clockwise", "counterclockwise"},
 		},
 	},
-	Required: []string{"has_location_code", "location_code", "asset_tags", "suggested_rotation"},
+	Required: []string{"has_location_tag", "location_tag", "asset_tags", "suggested_rotation"},
 }
 
 func (g *GenAIClient) AnalyzeReconciliation(ctx context.Context, model, prompt string, image []byte, mimeType string) (ReconciliationResult, error) {

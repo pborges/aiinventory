@@ -26,11 +26,31 @@ type captureResponse struct {
 }
 
 type capturePreviewResponse struct {
-	HasAssetTag      bool   `json:"has_asset_tag"`
-	AssetTag         string `json:"asset_tag,omitempty"`
-	ItemGuess        string `json:"item_guess,omitempty"`
-	ImageDescription string `json:"image_description,omitempty"`
-	ItemWillBeNew    bool   `json:"item_will_be_new,omitempty"`
+	HasAssetTag bool `json:"has_asset_tag"`
+	// AssetTag is the final tag to use — only set when it's an exact
+	// registry match, requiring no operator input. Empty whenever
+	// NeedsResolution is true.
+	AssetTag string `json:"asset_tag,omitempty"`
+	// RawAssetTag is what Gemini actually read, always set alongside
+	// HasAssetTag — the deterministic tag-registry check runs on top of
+	// this, it never replaces it.
+	RawAssetTag string `json:"raw_asset_tag,omitempty"`
+	// Corrected is true when there's a single, confident distance-1
+	// registry candidate for RawAssetTag. It still requires a one-tap
+	// confirm (NeedsResolution is also true) rather than auto-applying: a
+	// single OCR read has no corroborating second signal, so a genuinely
+	// different new tag that happens to be one letter off from an existing
+	// one must not get silently merged into it.
+	Corrected bool `json:"corrected,omitempty"`
+	// NeedsResolution is true whenever the read isn't an exact registry
+	// match — the operator must pick a candidate (Candidates[0] is the
+	// suggested one when Corrected) or type the tag manually before
+	// accepting.
+	NeedsResolution  bool     `json:"needs_resolution,omitempty"`
+	Candidates       []string `json:"candidates,omitempty"`
+	ItemGuess        string   `json:"item_guess,omitempty"`
+	ImageDescription string   `json:"image_description,omitempty"`
+	ItemWillBeNew    bool     `json:"item_will_be_new,omitempty"`
 }
 
 func readUploadedImage(r *http.Request) (data []byte, contentType string, err error) {
@@ -105,21 +125,45 @@ func (s *Server) handleCapturePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemWillBeNew := true
-	if _, err := s.store.GetItemByAssetTag(ctx, analysis.AssetTag); err == nil {
-		itemWillBeNew = false
-	} else if !errors.Is(err, store.ErrNotFound) {
+	registeredAssetTags, err := s.store.ListRegisteredAssetTags(ctx)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	match := inventory.ResolveTags([]string{analysis.AssetTag}, registeredAssetTags)[0]
 
-	writeJSON(w, http.StatusOK, capturePreviewResponse{
+	resp := capturePreviewResponse{
 		HasAssetTag:      true,
-		AssetTag:         analysis.AssetTag,
+		RawAssetTag:      analysis.AssetTag,
 		ItemGuess:        analysis.ItemGuess,
 		ImageDescription: analysis.Description,
-		ItemWillBeNew:    itemWillBeNew,
-	})
+	}
+	switch match.Status {
+	case inventory.TagStatusExact:
+		resp.AssetTag = match.Resolved
+		if _, err := s.store.GetItemByAssetTag(ctx, match.Resolved); err == nil {
+			resp.ItemWillBeNew = false
+		} else if errors.Is(err, store.ErrNotFound) {
+			resp.ItemWillBeNew = true
+		} else {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	case inventory.TagStatusCorrected:
+		// A single OCR read has no corroborating second signal (unlike the
+		// locate flow's dual-read cross-check), so even a "confident,
+		// unique" distance-1 match isn't auto-applied here: it's offered as
+		// the pre-selected suggestion, but a genuinely different new tag
+		// that happens to be one letter off from an existing one must not
+		// get silently merged into it without a human looking at it.
+		resp.Corrected = true
+		resp.NeedsResolution = true
+		resp.Candidates = []string{match.Resolved}
+	default: // ambiguous / no_match
+		resp.NeedsResolution = true
+		resp.Candidates = match.Candidates
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleCaptureApply is the write half, called only once the user accepts a

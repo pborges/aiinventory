@@ -8,6 +8,12 @@ interface Props {
   onApprove: (assetTags: string[]) => void
   onCancel: () => void
   applying: boolean
+  /** resolved tag -> raw OCR read, for any tag that reached this approval
+   * screen via a registry correction rather than an exact read — surfaced
+   * so a correction is never silently invisible to the operator, even
+   * though it isn't itself a blocking step at this point (the tag review
+   * step already required an explicit confirm to get here). */
+  correctedTags?: Record<string, string>
 }
 
 type DiffKind = 'new' | 'added' | 'moved' | 'removed'
@@ -30,7 +36,7 @@ const KIND_LABEL: Record<DiffKind, string> = {
  * own card with a trash icon to drop just that one change before approving;
  * dropping a new/added/moved card excludes that tag from what gets sent on
  * apply, dropping a removed card keeps that tag linked here instead. */
-export function ReconcileDiff({ diff, onApprove, onCancel, applying }: Props) {
+export function ReconcileDiff({ diff, onApprove, onCancel, applying, correctedTags }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
 
   const cards: DiffCard[] = [
@@ -62,7 +68,7 @@ export function ReconcileDiff({ diff, onApprove, onCancel, applying }: Props) {
   return (
     <div class="modal-overlay">
       <div class="modal-panel">
-        <h2>Reconciling {diff.location_code}</h2>
+        <h2>Reconciling {diff.location_tag}</h2>
 
         {noChanges ? (
           <p>No changes — this location already matches the frame.</p>
@@ -72,6 +78,9 @@ export function ReconcileDiff({ diff, onApprove, onCancel, applying }: Props) {
               <li class={`reconcile-diff-card diff-${card.kind}`} key={`${card.kind}-${card.assetTag}`}>
                 <span class="reconcile-diff-kind">{KIND_LABEL[card.kind]}</span>
                 <span class="reconcile-diff-tag">{card.assetTag}</span>
+                {correctedTags?.[card.assetTag] && (
+                  <span class="reconcile-diff-detail">read as {correctedTags[card.assetTag]}</span>
+                )}
                 {card.kind === 'moved' && card.fromLocation && (
                   <span class="reconcile-diff-detail">from {card.fromLocation}</span>
                 )}

@@ -22,6 +22,7 @@ type CaptureStore interface {
 	CreateItem(ctx context.Context, tag string) (domain.Item, error)
 	AddImage(ctx context.Context, itemID int64, data []byte, contentType, description string, createdBy int64) (domain.Image, error)
 	LogActivity(ctx context.Context, userID int64, action domain.ActivityAction, itemID, locationID *int64, detail string) error
+	RegisterAssetTag(ctx context.Context, tag string) error
 }
 
 type CaptureResult struct {
@@ -51,6 +52,14 @@ func Capture(ctx context.Context, s CaptureStore, userID int64, hasAssetTag bool
 		itemWasNew = true
 	case err != nil:
 		return CaptureResult{}, fmt.Errorf("look up item: %w", err)
+	}
+
+	// Self-heal the tag registry with whatever tag was actually accepted —
+	// an exact registry match, a confident auto-correction, or a manual
+	// operator override — so it's an exact match on every future scan
+	// regardless of how it got here.
+	if err := s.RegisterAssetTag(ctx, assetTag); err != nil {
+		return CaptureResult{}, fmt.Errorf("register tag: %w", err)
 	}
 
 	img, err := s.AddImage(ctx, item.ID, imageData, contentType, imageDescription, userID)

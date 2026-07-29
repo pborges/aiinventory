@@ -13,8 +13,8 @@ func TestGetOrCreateLocation(t *testing.T) {
 	s := NewTestStore(t)
 	user, _ := s.CreateFirstUser(ctx, "alice", "hash")
 
-	if _, err := s.GetLocationByCode(ctx, "@XYZ"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("GetLocationByCode on missing code = %v, want ErrNotFound", err)
+	if _, err := s.GetLocationByLocationTag(ctx, "@XYZ"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetLocationByLocationTag on missing tag = %v, want ErrNotFound", err)
 	}
 
 	loc1, err := s.GetOrCreateLocation(ctx, "@XYZ", user.ID)
@@ -47,19 +47,19 @@ func TestApplyReconciliation(t *testing.T) {
 	}
 
 	diff := domain.ReconcileDiff{
-		LocationCode: "@XYZ",
-		Added:        []string{zkei.AssetTag},
-		Moved:        []domain.MovedItem{{AssetTag: gkei.AssetTag, FromLocation: "@QRS"}},
-		Removed:      nil,
+		LocationTag: "@XYZ",
+		Added:       []string{zkei.AssetTag},
+		Moved:       []domain.MovedItem{{AssetTag: gkei.AssetTag, FromLocation: "@QRS"}},
+		Removed:     nil,
 	}
 
 	if err := s.ApplyReconciliation(ctx, user.ID, diff); err != nil {
 		t.Fatalf("ApplyReconciliation: %v", err)
 	}
 
-	newLoc, err := s.GetLocationByCode(ctx, "@XYZ")
+	newLoc, err := s.GetLocationByLocationTag(ctx, "@XYZ")
 	if err != nil {
-		t.Fatalf("GetLocationByCode @XYZ (should've been created): %v", err)
+		t.Fatalf("GetLocationByLocationTag @XYZ (should've been created): %v", err)
 	}
 
 	gotZkei, _ := s.GetItemByID(ctx, zkei.ID)
@@ -91,14 +91,14 @@ func TestApplyReconciliationNew(t *testing.T) {
 	s := NewTestStore(t)
 	user, _ := s.CreateFirstUser(ctx, "alice", "hash")
 
-	diff := domain.ReconcileDiff{LocationCode: "@XYZ", New: []string{"NOPE"}}
+	diff := domain.ReconcileDiff{LocationTag: "@XYZ", New: []string{"NOPE"}}
 	if err := s.ApplyReconciliation(ctx, user.ID, diff); err != nil {
 		t.Fatalf("ApplyReconciliation: %v", err)
 	}
 
-	loc, err := s.GetLocationByCode(ctx, "@XYZ")
+	loc, err := s.GetLocationByLocationTag(ctx, "@XYZ")
 	if err != nil {
-		t.Fatalf("GetLocationByCode @XYZ (should've been created): %v", err)
+		t.Fatalf("GetLocationByLocationTag @XYZ (should've been created): %v", err)
 	}
 
 	item, err := s.GetItemByAssetTag(ctx, "NOPE")
@@ -138,7 +138,7 @@ func TestApplyReconciliationRemoved(t *testing.T) {
 		t.Fatalf("SetItemLocation: %v", err)
 	}
 
-	diff := domain.ReconcileDiff{LocationCode: "@XYZ", Removed: []string{"XDKW"}}
+	diff := domain.ReconcileDiff{LocationTag: "@XYZ", Removed: []string{"XDKW"}}
 	if err := s.ApplyReconciliation(ctx, user.ID, diff); err != nil {
 		t.Fatalf("ApplyReconciliation: %v", err)
 	}
