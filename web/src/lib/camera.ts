@@ -29,3 +29,41 @@ export function captureSquareFrame(video: HTMLVideoElement): Promise<Blob> {
     )
   })
 }
+
+/**
+ * Rotates a square JPEG blob by the given number of degrees (dimensions are
+ * unchanged since the source is square). Used for the locate-flow dual-read
+ * experiment: analyzing the same frame straight and rotated 90° is a second,
+ * independent OCR pass that can catch a misread the other orientation
+ * happened to get right.
+ */
+export function rotateSquareBlob(blob: Blob, degrees: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('canvas 2d context unavailable'))
+        return
+      }
+      ctx.translate(canvas.width / 2, canvas.height / 2)
+      ctx.rotate((degrees * Math.PI) / 180)
+      ctx.drawImage(img, -img.width / 2, -img.height / 2)
+      canvas.toBlob(
+        (out) => (out ? resolve(out) : reject(new Error('image encoding failed'))),
+        'image/jpeg',
+        CAPTURE_JPEG_QUALITY,
+      )
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('image decoding failed'))
+    }
+    img.src = url
+  })
+}

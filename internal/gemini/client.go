@@ -83,8 +83,13 @@ var reconciliationSchema = &genai.Schema{
 		"has_location_code": {Type: genai.TypeBoolean},
 		"location_code":     {Type: genai.TypeString},
 		"asset_tags":        {Type: genai.TypeArray, Items: &genai.Schema{Type: genai.TypeString}},
+		"suggested_rotation": {
+			Type:   genai.TypeString,
+			Format: "enum",
+			Enum:   []string{"clockwise", "counterclockwise"},
+		},
 	},
-	Required: []string{"has_location_code", "location_code", "asset_tags"},
+	Required: []string{"has_location_code", "location_code", "asset_tags", "suggested_rotation"},
 }
 
 func (g *GenAIClient) AnalyzeReconciliation(ctx context.Context, model, prompt string, image []byte, mimeType string) (ReconciliationResult, error) {

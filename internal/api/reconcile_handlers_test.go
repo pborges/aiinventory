@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -114,6 +115,70 @@ func TestReconcilePreviewRejectsMalformedAssetTag(t *testing.T) {
 		if resp.HasLocationCode {
 			t.Errorf("tags %v: HasLocationCode = true, want false", tags)
 		}
+	}
+}
+
+func TestReconcilePreviewIncludesSuggestedRotation(t *testing.T) {
+	// The locate flow's dual-read cross-check rotates the same frame using
+	// whichever direction Gemini suggests on the first (straight) read —
+	// that value has to survive onto the preview response for the frontend
+	// to act on it.
+	fake := &gemini.Fake{ReconciliationResult: gemini.ReconciliationResult{
+		HasLocationCode:   true,
+		LocationCode:      "@XYZ",
+		AssetTags:         []string{"ZKEI"},
+		SuggestedRotation: "counterclockwise",
+	}}
+	h, cookies := newTestServerWithGemini(t, fake)
+
+	req := doMultipartUpload(t, h, "/api/reconcile/preview", cookies, []byte("photo"), nil)
+	if req.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", req.Code, req.Body.String())
+	}
+	var resp reconcileDiffResponse
+	json.NewDecoder(req.Body).Decode(&resp)
+	if resp.SuggestedRotation != "counterclockwise" {
+		t.Errorf("SuggestedRotation = %q, want %q", resp.SuggestedRotation, "counterclockwise")
+	}
+}
+
+func TestReconcileDiffComputesWithoutCallingGemini(t *testing.T) {
+	// /api/reconcile/diff backs the tag-agreement review step after two
+	// dual-read analyses disagree: the frontend already has a resolved tag
+	// list by then and just needs a fresh diff, no further Gemini call.
+	fake := &gemini.Fake{ReconciliationErr: errors.New("must not call Gemini")}
+	h, cookies := newTestServerWithGemini(t, fake)
+
+	fake.TagCaptureResult = gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI"}
+	doCaptureUpload(t, h, cookies, []byte("zkei-photo"))
+
+	w := doJSON(t, h, http.MethodPost, "/api/reconcile/diff", applyReconcileRequest{LocationCode: "@XYZ", AssetTags: []string{"ZKEI"}}, cookies)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp reconcileDiffResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// ZKEI already exists as an unlinked item (captured above), so linking it
+	// to a location classifies as Added, not New (see ComputeReconciliation).
+	if len(resp.Added) != 1 || resp.Added[0] != "ZKEI" {
+		t.Errorf("Added = %v, want [ZKEI]", resp.Added)
+	}
+}
+
+func TestReconcileDiffRejectsMalformedInput(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies := newTestServerWithGemini(t, fake)
+
+	w := doJSON(t, h, http.MethodPost, "/api/reconcile/diff", applyReconcileRequest{LocationCode: "@XY", AssetTags: []string{"ZKEI"}}, cookies)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("malformed location_code: status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+
+	w = doJSON(t, h, http.MethodPost, "/api/reconcile/diff", applyReconcileRequest{LocationCode: "@XYZ", AssetTags: []string{"zkei"}}, cookies)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("malformed asset_tags: status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
 

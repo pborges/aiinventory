@@ -104,6 +104,10 @@ export interface ReconcileDiffResponse {
   added: string[]
   moved: MovedItem[]
   removed: string[]
+  // Only set on the first (straight) preview response of the locate flow's
+  // dual-read cross-check — which way to rotate the same frame for the
+  // second, corroborating read.
+  suggested_rotation?: 'clockwise' | 'counterclockwise'
 }
 
 export interface Tag {
@@ -223,6 +227,11 @@ export const api = {
     form.set('image', image, 'capture.jpg')
     return upload<ReconcileDiffResponse>('/api/reconcile/preview', form)
   },
+  reconcileDiff: (locationCode: string, assetTags: string[]) =>
+    request<ReconcileDiffResponse>('POST', '/api/reconcile/diff', {
+      location_code: locationCode,
+      asset_tags: assetTags,
+    }),
   reconcileApply: (locationCode: string, assetTags: string[]) =>
     request<ReconcileDiffResponse>('POST', '/api/reconcile/apply', {
       location_code: locationCode,

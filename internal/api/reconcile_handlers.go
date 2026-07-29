@@ -33,6 +33,10 @@ type reconcileDiffResponse struct {
 	Added     []string            `json:"added"`
 	Moved     []movedItemResponse `json:"moved"`
 	Removed   []string            `json:"removed"`
+	// SuggestedRotation is only set on the first (straight) preview response
+	// of the locate flow's dual-read cross-check — it tells the frontend
+	// which way to rotate the same frame for the second, corroborating read.
+	SuggestedRotation string `json:"suggested_rotation,omitempty"`
 }
 
 func toReconcileDiffResponse(diff domain.ReconcileDiff, assetTags []string) reconcileDiffResponse {
@@ -142,12 +146,51 @@ func (s *Server) handleReconcilePreview(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	writeJSON(w, http.StatusOK, toReconcileDiffResponse(diff, analysis.AssetTags))
+	resp := toReconcileDiffResponse(diff, analysis.AssetTags)
+	resp.SuggestedRotation = analysis.SuggestedRotation
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type applyReconcileRequest struct {
 	LocationCode string   `json:"location_code"`
 	AssetTags    []string `json:"asset_tags"`
+}
+
+// handleReconcileDiff recomputes the read-only diff for an explicit
+// (location_code, asset_tags) pair — no Gemini call, nothing written. This
+// backs the tag-agreement review step: when two analyses of the same frame
+// (e.g. straight vs. rotated) disagree on which tags are visible and the
+// user resolves the disagreement by hand, the resulting tag list still
+// needs a fresh diff against current DB state before it can be shown.
+func (s *Server) handleReconcileDiff(w http.ResponseWriter, r *http.Request) {
+	if _, ok := auth.CurrentUser(r.Context()); !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req applyReconcileRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if !locationCodePattern.MatchString(req.LocationCode) {
+		writeError(w, http.StatusBadRequest, `location_code must be "@" followed by exactly 3 uppercase letters`)
+		return
+	}
+	for _, tag := range req.AssetTags {
+		if !assetTagPattern.MatchString(tag) {
+			writeError(w, http.StatusBadRequest, "asset_tags must each be exactly 4 uppercase letters")
+			return
+		}
+	}
+
+	ctx := r.Context()
+	diff, err := inventory.ComputeReconciliation(ctx, s.store, req.LocationCode, req.AssetTags)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	writeJSON(w, http.StatusOK, toReconcileDiffResponse(diff, req.AssetTags))
 }
 
 // handleReconcileApply is the write half: the frontend resubmits the same

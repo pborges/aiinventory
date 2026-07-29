@@ -54,6 +54,7 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStor
 	mux.Handle("POST /api/capture/apply", srv.requireAuth(srv.handleCaptureApply))
 
 	mux.Handle("POST /api/reconcile/preview", srv.requireAuth(srv.handleReconcilePreview))
+	mux.Handle("POST /api/reconcile/diff", srv.requireAuth(srv.handleReconcileDiff))
 	mux.Handle("POST /api/reconcile/apply", srv.requireAuth(srv.handleReconcileApply))
 
 	mux.Handle("GET /api/search", srv.requireAuth(srv.handleSearch))

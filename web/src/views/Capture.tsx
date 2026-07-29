@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { faCamera, faMap, faXmark, faCheck } from '@fortawesome/free-solid-svg-icons'
 import { api, ApiError, type ReconcileDiffResponse } from '../api/client'
-import { captureSquareFrame } from '../lib/camera'
+import { captureSquareFrame, rotateSquareBlob } from '../lib/camera'
 import { ReconcileDiff } from '../components/ReconcileDiff'
+import { TagAgreementReview } from '../components/TagAgreementReview'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { Icon } from '../components/Icon'
@@ -24,6 +25,12 @@ interface PendingCapture {
 
 type ResultData = { kind: 'nothing' } | { kind: 'error'; message: string }
 
+interface TagReviewState {
+  locationCode: string
+  agreedTags: string[]
+  diffTags: string[]
+}
+
 export function Capture(_props: RouteProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const capturedBlobRef = useRef<Blob | null>(null)
@@ -35,6 +42,8 @@ export function Capture(_props: RouteProps) {
   const [result, setResult] = useState<ResultData | null>(null)
   const [pendingDiff, setPendingDiff] = useState<ReconcileDiffResponse | null>(null)
   const [applyingReconcile, setApplyingReconcile] = useState(false)
+  const [tagReview, setTagReview] = useState<TagReviewState | null>(null)
+  const [confirmingTagReview, setConfirmingTagReview] = useState(false)
 
   useEffect(() => {
     let stream: MediaStream | null = null
@@ -108,18 +117,74 @@ export function Capture(_props: RouteProps) {
         return
       }
 
-      const diff = await api.reconcilePreview(blob)
-      if (diff.has_location_code) {
-        setPendingDiff(diff) // stays in 'analyzing' (spinner) until the modal is resolved
+      // Experiment: analyze the frame straight, then rotated, as a
+      // cross-check against OCR misreads — a tag only one orientation's read
+      // finds isn't silently trusted either way, it's flagged for the user
+      // below instead. The rotation direction comes from the straight read
+      // itself (Gemini judges which way makes the vertical asset tags most
+      // upright), so this second call can't start until the first returns —
+      // no parallelizing this one.
+      const straight = await api.reconcilePreview(blob)
+      if (!straight.has_location_code) {
+        setResult({ kind: 'nothing' })
+        setPhase('result')
+        return
+      }
+      const rotationDegrees = straight.suggested_rotation === 'counterclockwise' ? -90 : 90
+      const rotatedBlob = await rotateSquareBlob(blob, rotationDegrees)
+      const rotated = await api.reconcilePreview(rotatedBlob)
+
+      const codesAgree = rotated.has_location_code && straight.location_code === rotated.location_code
+      if (!codesAgree) {
+        setResult({ kind: 'nothing' })
+        setPhase('result')
         return
       }
 
-      setResult({ kind: 'nothing' })
-      setPhase('result')
+      const straightTags = new Set(straight.asset_tags)
+      const rotatedTags = new Set(rotated.asset_tags)
+      const agreedTags = straight.asset_tags.filter((tag) => rotatedTags.has(tag))
+      const diffTags = [...new Set([...straight.asset_tags, ...rotated.asset_tags])].filter(
+        (tag) => !(straightTags.has(tag) && rotatedTags.has(tag)),
+      )
+
+      if (diffTags.length === 0) {
+        setPendingDiff(straight) // full agreement — stays in 'analyzing' (spinner) until the modal is resolved
+        return
+      }
+
+      setTagReview({ locationCode: straight.location_code!, agreedTags, diffTags })
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Capture failed' })
       setPhase('result')
     }
+  }
+
+  async function onConfirmTagReview(selectedDiffTags: string[]) {
+    if (!tagReview) return
+    setConfirmingTagReview(true)
+    try {
+      const assetTags = [...tagReview.agreedTags, ...selectedDiffTags]
+      const diff = await api.reconcileDiff(tagReview.locationCode, assetTags)
+      setTagReview(null)
+      setConfirmingTagReview(false)
+      if (diff.has_location_code) {
+        setPendingDiff(diff) // stays in 'analyzing' (spinner) until the modal is resolved
+        return
+      }
+      setResult({ kind: 'nothing' })
+      setPhase('result')
+    } catch (err) {
+      setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Capture failed' })
+      setTagReview(null)
+      setConfirmingTagReview(false)
+      setPhase('result')
+    }
+  }
+
+  function onCancelTagReview() {
+    setTagReview(null)
+    resetToLive()
   }
 
   async function onAcceptCapture() {
@@ -197,7 +262,7 @@ export function Capture(_props: RouteProps) {
         </div>
 
         <div class="capture-results">
-          {phase === 'analyzing' && !pendingDiff && <p class="capture-feedback">Analyzing photo…</p>}
+          {phase === 'analyzing' && !pendingDiff && !tagReview && <p class="capture-feedback">Analyzing photo…</p>}
           {phase === 'committing' && <p class="capture-feedback">Saving…</p>}
 
           {phase === 'awaiting-accept' && pendingCapture && (
@@ -267,6 +332,17 @@ export function Capture(_props: RouteProps) {
           applying={applyingReconcile}
           onApprove={onApproveReconcile}
           onCancel={onCancelReconcile}
+        />
+      )}
+
+      {tagReview && (
+        <TagAgreementReview
+          locationCode={tagReview.locationCode}
+          agreedTags={tagReview.agreedTags}
+          diffTags={tagReview.diffTags}
+          confirming={confirmingTagReview}
+          onConfirm={onConfirmTagReview}
+          onCancel={onCancelTagReview}
         />
       )}
 

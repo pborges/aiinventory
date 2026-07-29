@@ -10,7 +10,10 @@ Both the location code letters and the asset tag letters are always letters only
 
 The location_code and asset_tags you report are checked afterward against their exact expected shape (location_code: "@" plus exactly 3 letters; each asset tag: exactly 4 letters) — anything that doesn't match exactly is discarded, so count the letters carefully before reporting. If you cannot confidently make out the exact letters or letter count for a code, leave it out rather than guessing.
 
+This same photo will also be rotated 90° and re-analyzed as a second, independent read to cross-check the one you're doing now. Decide which single direction — clockwise or counterclockwise — that 90° rotation should go so the vertically-printed asset tags end up as close to upright and easy to read as possible in the rotated version.
+
 Respond with:
 - has_location_code: whether a valid @-prefixed 3-letter location code was found
 - location_code: the code including the "@", exactly as printed (empty string if none found)
 - asset_tags: a list of every distinct 4-letter asset tag visible in the frame (empty list if none)
+- suggested_rotation: "clockwise" or "counterclockwise" — the 90° rotation direction that would make the asset tags most upright and legible

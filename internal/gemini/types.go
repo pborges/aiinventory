@@ -27,6 +27,10 @@ type ReconciliationResult struct {
 	HasLocationCode bool     `json:"has_location_code"`
 	LocationCode    string   `json:"location_code"`
 	AssetTags       []string `json:"asset_tags"`
+	// SuggestedRotation is "clockwise" or "counterclockwise": which way this
+	// same frame should be rotated for a clearer second read, used by the
+	// locate flow's dual-read cross-check (see reconcile_handlers.go).
+	SuggestedRotation string `json:"suggested_rotation"`
 }
 
 // DescriptionResult is a consolidated item description synthesized from
