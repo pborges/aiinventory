@@ -18,6 +18,12 @@ const (
 	SettingPromptLocationReconciliation  = "prompt.location_reconciliation"
 	SettingPromptDescriptionRegeneration = "prompt.description_regeneration"
 	SettingPromptDuplicateDetection      = "prompt.duplicate_detection"
+	// SettingLocationDualReadEnabled toggles the locate flow's straight+
+	// rotated dual-read cross-check (see internal/api's reconcile handlers
+	// and the webui's Capture view). Absent or any value other than
+	// "false" means enabled, matching the feature's original always-on
+	// behavior so existing installs don't change behavior on upgrade.
+	SettingLocationDualReadEnabled = "location_dual_read_enabled"
 )
 
 // GetSetting returns (value, true, nil) if key is set, ("", false, nil) if absent.

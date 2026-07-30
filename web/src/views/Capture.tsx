@@ -88,6 +88,17 @@ export function Capture(_props: RouteProps) {
   // since /api/reconcile/diff doesn't re-run resolution and can't
   // reconstruct this after the tag-review step.
   const [correctedTags, setCorrectedTags] = useState<Record<string, string>>({})
+  // Settings → Gemini configuration's "Dual-read location tag cross-check"
+  // toggle — defaults true (the flow's original always-on behavior) until
+  // the real value loads, so a slow settings fetch never silently disables it.
+  const [dualReadEnabled, setDualReadEnabled] = useState(true)
+
+  useEffect(() => {
+    api
+      .getSettings()
+      .then((s) => setDualReadEnabled(s.location_dual_read_enabled))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     let stream: MediaStream | null = null
@@ -248,22 +259,29 @@ export function Capture(_props: RouteProps) {
       // below instead. The rotation direction comes from the straight read
       // itself (Gemini judges which way makes the vertical asset tags most
       // upright), so this second call can't start until the first returns —
-      // no parallelizing this one.
+      // no parallelizing this one. Settings can turn this off (halving the
+      // Gemini calls per scan); when disabled, `rotated` is just `straight`
+      // again, which makes continueWithAssetTags's presence-agreement diff
+      // a no-op and falls back to trusting a single read's tag resolutions.
       const straight = await api.reconcilePreview(blob)
       if (!straight.has_location_tag) {
         setResult({ kind: 'nothing' })
         setPhase('result')
         return
       }
-      const rotationDegrees = straight.suggested_rotation === 'counterclockwise' ? -90 : 90
-      const rotatedBlob = await rotateSquareBlob(blob, rotationDegrees)
-      const rotated = await api.reconcilePreview(rotatedBlob)
 
-      const tagsAgree = rotated.has_location_tag && straight.location_tag === rotated.location_tag
-      if (!tagsAgree) {
-        setResult({ kind: 'nothing' })
-        setPhase('result')
-        return
+      let rotated = straight
+      if (dualReadEnabled) {
+        const rotationDegrees = straight.suggested_rotation === 'counterclockwise' ? -90 : 90
+        const rotatedBlob = await rotateSquareBlob(blob, rotationDegrees)
+        rotated = await api.reconcilePreview(rotatedBlob)
+
+        const tagsAgree = rotated.has_location_tag && straight.location_tag === rotated.location_tag
+        if (!tagsAgree) {
+          setResult({ kind: 'nothing' })
+          setPhase('result')
+          return
+        }
       }
 
       // The location tag has to be resolved before the diff above (which was

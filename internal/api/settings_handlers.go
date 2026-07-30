@@ -22,10 +22,11 @@ type promptSetting struct {
 }
 
 type settingsResponse struct {
-	GeminiAPIKeySet    bool                     `json:"gemini_api_key_set"`
-	GeminiModel        string                   `json:"gemini_model"`
-	GeminiModelDefault string                   `json:"gemini_model_default"`
-	Prompts            map[string]promptSetting `json:"prompts"`
+	GeminiAPIKeySet         bool                     `json:"gemini_api_key_set"`
+	GeminiModel             string                   `json:"gemini_model"`
+	GeminiModelDefault      string                   `json:"gemini_model_default"`
+	Prompts                 map[string]promptSetting `json:"prompts"`
+	LocationDualReadEnabled bool                     `json:"location_dual_read_enabled"`
 }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
@@ -59,18 +60,25 @@ func (s *Server) buildSettingsResponse(r *http.Request) (settingsResponse, error
 		prompts[string(rt)] = promptSetting{Override: override, Default: gemini.DefaultPrompt(rt)}
 	}
 
+	dualReadSetting, _, err := s.store.GetSetting(ctx, store.SettingLocationDualReadEnabled)
+	if err != nil {
+		return settingsResponse{}, err
+	}
+
 	return settingsResponse{
-		GeminiAPIKeySet:    apiKey != "",
-		GeminiModel:        model,
-		GeminiModelDefault: gemini.DefaultModel,
-		Prompts:            prompts,
+		GeminiAPIKeySet:         apiKey != "",
+		GeminiModel:             model,
+		GeminiModelDefault:      gemini.DefaultModel,
+		Prompts:                 prompts,
+		LocationDualReadEnabled: dualReadSetting != "false",
 	}, nil
 }
 
 type updateSettingsRequest struct {
-	GeminiAPIKey *string           `json:"gemini_api_key"`
-	GeminiModel  *string           `json:"gemini_model"`
-	Prompts      map[string]string `json:"prompts"`
+	GeminiAPIKey            *string           `json:"gemini_api_key"`
+	GeminiModel             *string           `json:"gemini_model"`
+	Prompts                 map[string]string `json:"prompts"`
+	LocationDualReadEnabled *bool             `json:"location_dual_read_enabled"`
 }
 
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +124,17 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusInternalServerError, "internal error")
 				return
 			}
+		}
+	}
+
+	if req.LocationDualReadEnabled != nil {
+		v := "true"
+		if !*req.LocationDualReadEnabled {
+			v = "false"
+		}
+		if err := s.store.SetSetting(ctx, store.SettingLocationDualReadEnabled, v); err != nil {
+			writeError(w, http.StatusInternalServerError, "internal error")
+			return
 		}
 	}
 

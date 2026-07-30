@@ -58,6 +58,39 @@ func TestSettingsDefaultsBeforeAnyOverride(t *testing.T) {
 	if tc.Default != gemini.DefaultPrompt(gemini.TagCapture) {
 		t.Errorf("tag_capture default mismatch")
 	}
+	if !resp.LocationDualReadEnabled {
+		t.Error("LocationDualReadEnabled = false, want true (enabled by default, before any override)")
+	}
+}
+
+func TestSettingsLocationDualReadToggle(t *testing.T) {
+	h, cookies := loggedInServer(t)
+
+	w := doJSON(t, h, http.MethodPut, "/api/settings", updateSettingsRequest{LocationDualReadEnabled: boolPtr(false)}, cookies)
+	if w.Code != http.StatusOK {
+		t.Fatalf("PUT status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp settingsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.LocationDualReadEnabled {
+		t.Error("LocationDualReadEnabled = true after disabling, want false")
+	}
+
+	// persists across a fresh request, not just echoed
+	w = doJSON(t, h, http.MethodGet, "/api/settings", nil, cookies)
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.LocationDualReadEnabled {
+		t.Error("after reload, LocationDualReadEnabled = true, want false")
+	}
+
+	// re-enabling flips it back
+	w = doJSON(t, h, http.MethodPut, "/api/settings", updateSettingsRequest{LocationDualReadEnabled: boolPtr(true)}, cookies)
+	json.NewDecoder(w.Body).Decode(&resp)
+	if !resp.LocationDualReadEnabled {
+		t.Error("LocationDualReadEnabled = false after re-enabling, want true")
+	}
 }
 
 func TestSettingsUpdateRoundTrips(t *testing.T) {
@@ -135,3 +168,5 @@ func TestSettingsGeminiAPIKeySetAndClear(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+func boolPtr(b bool) *bool { return &b }

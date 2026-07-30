@@ -66,6 +66,7 @@ export interface Settings {
   gemini_model: string
   gemini_model_default: string
   prompts: Record<string, PromptSetting>
+  location_dual_read_enabled: boolean
 }
 
 
@@ -73,6 +74,7 @@ export interface SettingsUpdate {
   gemini_api_key?: string
   gemini_model?: string
   prompts?: Record<string, string>
+  location_dual_read_enabled?: boolean
 }
 
 export interface CaptureResponse {

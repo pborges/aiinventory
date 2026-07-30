@@ -47,6 +47,7 @@ export function Settings(_props: RouteProps) {
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('')
   const [overrides, setOverrides] = useState<Record<string, string>>({})
+  const [dualReadEnabled, setDualReadEnabled] = useState(true)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -65,6 +66,7 @@ export function Settings(_props: RouteProps) {
       const o: Record<string, string> = {}
       for (const { key } of PROMPT_TYPES) o[key] = s.prompts[key]?.override ?? ''
       setOverrides(o)
+      setDualReadEnabled(s.location_dual_read_enabled)
     })
     loadUsers()
   }, [])
@@ -89,6 +91,7 @@ export function Settings(_props: RouteProps) {
       const updated = await api.updateSettings({
         gemini_model: model,
         prompts: overrides,
+        location_dual_read_enabled: dualReadEnabled,
         ...(apiKey ? { gemini_api_key: apiKey } : {}),
       })
       setData(updated)
@@ -202,6 +205,20 @@ export function Settings(_props: RouteProps) {
                         ))}
                       </datalist>
                     </label>
+
+                    <label class="settings-checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={dualReadEnabled}
+                        onChange={(e) => setDualReadEnabled((e.target as HTMLInputElement).checked)}
+                      />
+                      Dual-read location tag cross-check
+                    </label>
+                    <p class="settings-field-hint">
+                      When enabled, a "Locate items" capture analyzes each frame twice — straight and rotated 90° — and
+                      cross-checks the two reads before trusting a tag. Disabling this halves the Gemini calls per locate
+                      scan but drops that extra safety check.
+                    </p>
 
                     {PROMPT_TYPES.map(({ key, label }) => (
                       <div class="settings-field" key={key}>

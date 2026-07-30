@@ -14,16 +14,17 @@ Traditional inventory tools make you type everything. This one leans on a vision
 
 The camera view hugs the top of the header — a square viewport sized to leave room below it for results — with the capture button pinned to the true bottom-right corner of the phone's viewport (thumb-friendly, one-handed use, regardless of how tall the camera square itself is). It's a **preview-then-commit** flow, mirroring [location reconciliation](#2-camera-capture--location-reconciliation) below: nothing is written to the database until the user explicitly accepts.
 
-A **mode toggle** directly under the viewfinder — **📷 Ingest item** vs **🗺️ Locate items** — picks which flow a capture runs. Earlier versions tried to guess (asset-tag flow first, falling back to location-reconciliation if nothing was found), but asset tags and location codes are both just a handful of uppercase letters on a white sticker, and letting Gemini guess which one it was looking for was unreliable in practice. The toggle is disabled mid-capture and stays on whatever you last picked across shots, since scanning a run of the same kind of label back-to-back is the common case.
+A **mode toggle** directly under the viewfinder — **📷 Ingest item** vs **🗺️ Locate items** — picks which flow a capture runs. Earlier versions tried to guess (asset-tag flow first, falling back to location-reconciliation if nothing was found), but asset tags and location tags are both just a handful of uppercase letters on a white sticker, and letting Gemini guess which one it was looking for was unreliable in practice. The toggle is disabled mid-capture and stays on whatever you last picked across shots, since scanning a run of the same kind of label back-to-back is the common case.
 
 1. **Capture** — tapping the button freezes the viewfinder on the shot just taken (the live `<video>` stream stays running underneath; the frozen frame is just laid on top) and the button becomes a spinner while the frame is analyzed.
-2. **Analyze (preview)** — the frame is resized/compressed client-side to a bounded max dimension *before* it goes anywhere, then uploaded to a preview endpoint that asks Gemini to look for:
+2. **Analyze (preview)** — the frame is resized/compressed client-side to a bounded max dimension *before* it goes anywhere, then uploaded to a preview endpoint that asks Gemini (pinned to `temperature=0`/`topK=1`, since this is a fixed-fact read rather than open-ended generation) to look for:
    - **An asset tag** — a 4-character, uppercase-alpha-only code printed as black text on a white label (e.g. `ZKEI`).
-   - **The item itself** — Gemini attempts to identify what the item is, and transcribes any visible serial numbers, part numbers, or other identifying text. Descriptions deliberately never mention quantity or how items are arranged (a bin holding a dozen identical connectors is still described as one connector, not "several loosely packed connectors") — the asset tag identifies an item *type*, not a specific physical count.
+   - **The item itself** — Gemini attempts to identify what the item is, calling out a part's generic type alongside its part number where relevant (e.g. noting `ATF22V10C` is a PLD, `W24512AK` is static RAM), and transcribes any visible serial numbers, part numbers, or other identifying text. Descriptions deliberately never mention quantity or how items are arranged (a bin holding a dozen identical connectors is still described as one connector, not "several loosely packed connectors") — the asset tag identifies an item *type*, not a specific physical count.
    - Analyzing never writes anything by itself.
-3. **Review** — if a tag was found, a result card shows the tag, whether accepting will add a new item or a new photo to an existing one, and the short per-image description Gemini read off the photo. Two buttons replace the capture button: **Cancel** (✕, discards the photo, no server write, camera returns live) and **Accept** (✓, commits it).
-4. **Accept (apply)** — accepting re-uploads the same photo to an apply endpoint along with the reviewed tag/description, which does the actual write (create-or-append) and is trusted to echo back what the client showed rather than re-calling Gemini. On success the view clears completely and returns straight to a live, ready-to-shoot camera — no lingering confirmation text to dismiss before the next shot. On failure, the frozen frame and an error message stay up until acknowledged.
-5. **No tag found** — if the frame contains no asset tag, the camera shows a "no asset tag found" message and a single button to clear and try again (switch to **Locate items** first if the frame actually has a location code instead).
+3. **Validate & resolve the tag** — Gemini's JSON schema alone doesn't enforce the tag's shape, so a well-formed-but-garbled read (wrong letter count, a stray digit, lowercase) is deterministically rejected before it ever reaches the review screen. A shape-valid read is then checked against the **asset-tag registry** (every asset tag ever accepted, plus anything pre-registered in [Settings](#7-settings-desktop)): an exact match is used as-is, a read that's a single letter off from exactly one registered tag is offered as a pre-selected correction, and anything more ambiguous or with no close match makes the operator pick a candidate or type the tag by hand — nothing Gemini reads is ever silently substituted.
+4. **Review** — if a tag was resolved, a result card shows the tag, whether accepting will add a new item or a new photo to an existing one, and the short per-image description Gemini read off the photo next to a **Desc** checkbox (checked by default) — unchecking it strikes the preview text through and accepts the photo with no per-image description saved. Two buttons replace the capture button: **Cancel** (✕, discards the photo, no server write, camera returns live) and **Accept** (✓, commits it).
+5. **Accept (apply)** — accepting re-uploads the same photo to an apply endpoint along with the resolved tag and (if the Desc checkbox was left on) description, which does the actual write (create-or-append) and is trusted to echo back what the client showed rather than re-calling Gemini. On success the view clears completely and returns straight to a live, ready-to-shoot camera — no lingering confirmation text to dismiss before the next shot. On failure, the frozen frame and an error message stay up until acknowledged.
+6. **No tag found** — if the frame contains no asset tag, the camera shows a "no asset tag found" message and a single button to clear and try again (switch to **Locate items** first if the frame actually has a location tag instead).
 
 | Frame contains (Ingest item mode) | Result on Accept |
 |---|---|
@@ -35,9 +36,13 @@ Each image gets a **short, per-image description** (what Gemini read off that sp
 
 ### 2. Camera capture — location reconciliation
 
-A **location code** is `@` followed by 3 uppercase-alpha-only characters (e.g. `@XYZ`) and marks a storage location — a bin, shelf, or box, in a chaotic-storage model similar to Amazon's warehouses.
+A **location tag** is `@` followed by 3 uppercase-alpha-only characters (e.g. `@XYZ`) and marks a storage location — a bin, shelf, or box, in a chaotic-storage model similar to Amazon's warehouses. A location can also carry an optional free-text **description**, shown alongside its tag wherever one appears in the UI (e.g. `@XYZ (Shelf A)`).
 
-Selecting **🗺️ Locate items** on the mode toggle (see [tag capture](#1-camera-capture--tagging-an-item) above) routes a capture through this flow instead: Gemini reads the location code plus every asset tag visible in the same frame, and the app computes a **reconciliation diff** against the location's current contents:
+Selecting **🗺️ Locate items** on the mode toggle (see [tag capture](#1-camera-capture--tagging-an-item) above) routes a capture through this flow instead. By default, rather than trusting a single read, Gemini analyzes the same frame twice — once straight, once rotated (Gemini itself picks the rotation direction off the first read) — as a **dual-read cross-check**: the location tag and every asset tag are diffed between the two reads. A toggle in [Settings](#7-settings-desktop) can turn this off, which skips the rotated second read entirely and falls back to trusting a single read (still subject to the registry check below) — halving the Gemini calls per scan at the cost of that cross-check.
+
+Both the location tag and every asset tag also go through the same deterministic validate-and-resolve step as [tag capture](#1-camera-capture--tagging-an-item) — location tags resolve against their own registry (Settings → [Location Tags](#7-settings-desktop)), independent from the asset-tag one. Anything both reads agree on *and* that resolves to an exact registry match goes straight into the diff below; anything only one read found, or that doesn't cleanly resolve, is surfaced in a **Confirm tags** step where the user individually accepts, corrects, or excludes each disputed tag before the diff is (re)computed.
+
+Once the tag set is settled, the app computes a **reconciliation diff** against the location's current contents:
 
 - Asset tags in the frame that don't match any existing item anywhere → **new** item created (no photo) and linked to this location
 - Asset tags in the frame but not currently linked to this location → **added**
@@ -71,6 +76,8 @@ Search is a primary view on **both** mobile and desktop — it's the fast path t
 - Items with no photo
 - A specific location (also reachable by clicking a location badge from the item detail view)
 
+Above the results, a **label filters** card stacks a location-label cloud over an item-label cloud — clickable, color-coded chips for every user-defined [label](#7-settings-desktop). Selecting multiple labels within one cloud is OR'd together (any match); each cloud's selection is then AND'd against every other active filter, including the other cloud. Labels are separate from — and filtered independently of — the physical asset-tag/location-tag identifiers used during capture.
+
 On mobile, search leans toward *finding*, not maintaining: type-ahead results rendered as image-and-description cards (primary photo + consolidated description, so you can visually confirm "yes, that's the drill I'm looking for" at a glance) rather than a dense data table. Tapping a result opens the item detail view. Bulk select/maintenance actions exist but are a secondary, desktop-first concern.
 
 On desktop, results are selectable (with select-all), and bulk actions apply to the current selection:
@@ -84,7 +91,8 @@ Gemini reviews all per-image descriptions attached to an item's photos and conso
 
 A specialized version of the search page, scoped to browsing and organizing *by location* rather than by item — mostly a desktop experience.
 
-- A **left sidebar** lists all locations; selecting one filters the main area to items currently linked to it (this is the same underlying filter as "specific location" in search).
+- A **left sidebar** lists all locations, with a **location-label filter cloud** above it to narrow the list by assigned labels; selecting a location filters the main area to items currently linked to it (this is the same underlying filter as "specific location" in search).
+- Selecting a location also surfaces its optional **description** and its **labels** inline for editing — the same label pool used to filter here and in [search](#3-search--bulk-actions).
 - The main area shows richer item cards than plain search results — **live image carousels and full descriptions** per item, not just a single thumbnail.
 - Item cards can be **dragged onto a different location** in the sidebar to move them — a manual, desktop alternative to relocating an item via the camera reconciliation flow. A drag-move writes the same kind of `item_moved` activity entry that reconciliation does.
 - When filtered to a single location, a **footer-like panel** shows that location's activity log (reconciliations, items moved in/out, etc.).
@@ -107,6 +115,7 @@ Primarily a desktop layout, but functional on mobile. Contains:
 
 - An image **carousel** of every photo captured for the item. Images are **drag-and-drop reorderable**; the first image in order is the item's primary image (no separate "select primary" step). Each photo can be **deleted** individually from the carousel.
 - The consolidated **item description** below the carousel, with a **Generate description** button that runs the same single-item description regeneration used by the [search view's bulk action](#3-search--bulk-actions) against just this item.
+- The item's **labels** (colored, user-defined — see [Settings](#7-settings-desktop)), toggled on/off via a chip cloud — the same pool [search](#3-search--bulk-actions) filters by.
 - A **shadowbox/lightbox** showing the *local* (per-image) description for whichever photo is focused in the carousel
 - The item's current **location**, shown prominently and clickable — clicking it jumps to the search view pre-filtered to that location
 - An **activity log** panel for the item (created, images added, moved between locations, description regenerated, merged, etc.) — the same kind of log shown in the [location view](#4-location-view-desktop), scoped to this item instead
@@ -114,132 +123,51 @@ Primarily a desktop layout, but functional on mobile. Contains:
 
 ### 7. Settings (desktop)
 
-An administrative page, split into two areas:
+An administrative page with a section per sidebar item:
 
 **Gemini configuration**
 - An API key field — the Gemini API key lives in the `settings` table, not an environment variable, so it can be set/rotated/cleared from here without restarting the server. The key is set-only: once configured, the field never echoes the raw value back, only whether one is set. Saving a new key rebuilds the live Gemini client immediately; clearing it disables AI-dependent routes immediately.
 - A dropdown to pick which Gemini model the app uses for every request type (tag capture, location reconciliation, description regeneration, duplicate detection).
 - Each of those request types has its own **prompt override**: a text area where a custom prompt can be typed in to replace the app's built-in one for that request. Directly under the text area, a small link opens the app's **default prompt for that type in a shadowbox** — so you can see exactly what you're overriding (or copy it as a starting point) without leaving the page. **If the text area is left empty, the built-in default prompt is used** — overrides are opt-in per request type, not required.
+- A **dual-read location tag cross-check** toggle (on by default) — turns the [location reconciliation](#2-camera-capture--location-reconciliation) flow's straight+rotated dual-read cross-check on or off. Disabling it halves the Gemini calls per locate scan (a single straight read is used, still validated against the location-tag registry) at the cost of losing that extra OCR safety net.
 
-**User management**
+**Users**
 - List, create, and enable/disable accounts (via the `enabled` flag — see [Auth](#auth)).
 - No admin/non-admin distinction yet: any logged-in, enabled user can manage other users' accounts, matching the flat permission model used everywhere else in the app.
+
+**Asset Tags** / **Location Tags**
+Two identically-shaped sections — one over asset-tag data, one over location-tag data — each with two subsections:
+- **Labels** — full CRUD (name + color, add/edit/delete) over that pool's user-defined labels, the colored chips shown on items/locations and used as filters in [search](#3-search--bulk-actions) and the [location view](#4-location-view-desktop). Item labels and location labels are entirely separate pools.
+- **Registered Tags** — CRUD (create, bulk-import from a one-tag-per-line `.txt` file, list, delete — no edit) over the tag registry backing the deterministic OCR-correction step used by [tag capture](#1-camera-capture--tagging-an-item) and [location reconciliation](#2-camera-capture--location-reconciliation). Every tag actually accepted through capture or reconciliation self-registers here automatically, so day-to-day scanning never needs this page — it exists for pre-registering a fresh batch of printed labels in bulk before they've ever been scanned, and for pruning tags that should no longer be recognized.
 
 ## Auth
 
 Simple username/password accounts stored in the database — no external identity provider. Every mutating action (item creation, image ingestion, location reconciliation, moves, deletes, description regeneration) is tagged with the acting username for accountability. Accounts can be disabled (`enabled` flag) without deleting them, so a deactivated user's name stays intact on historical activity. There's no role/permission tiering planned yet; any enabled, logged-in user can perform any action.
 
-## Data model (draft — refining)
+## Data model
 
-Proposed SQLite schema. This is a starting point, not final — flag anything that looks wrong or missing.
+SQLite-backed, structured around these core entities:
 
-```sql
-CREATE TABLE users (
-    id            INTEGER PRIMARY KEY,
-    username      TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    enabled       INTEGER NOT NULL DEFAULT 1,   -- 0/1; disabled users can't log in, but stay intact for activity attribution
-    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
-);
+- **User** — a username/password account. Disabling one (the `enabled` flag) blocks login without deleting the account, so its username stays intact on historical activity.
+- **Location** — a storage bin/shelf/box, identified by its location tag (`@` + 3 uppercase letters, e.g. `@XYZ`) plus an optional free-text description. Holds zero or more **location labels**.
+- **Item** — a physical thing being tracked, identified by its asset tag (4 uppercase letters, e.g. `ZKEI`, freed for reuse once the item is deleted) plus a consolidated description. At most one location at a time. Holds one or more **images** and zero or more **item labels**.
+- **Image** — one photo captured for an item: the optimized bytes actually sent to Gemini (no separate full-resolution original), a per-image description (what Gemini read off that specific photo), and a drag-and-drop sort order (lowest = primary image).
+- **Label** — a color-coded, human-curated tag (e.g. "Fragile"), distinct from the physical asset/location tags above. Item labels and location labels are two entirely independent pools.
+- **Registered tag** — one entry in the asset-tag or location-tag allow-list backing the deterministic OCR-correction step (see [tag capture](#1-camera-capture--tagging-an-item)). Self-registers whenever a tag is actually accepted through capture/reconciliation; Settings can also pre-register or bulk-import entries directly.
+- **Settings** — a generic key/value store for the Gemini model choice, per-request-type prompt overrides, the [dual-read toggle](#7-settings-desktop), and the auto-generated session secret.
+- **Activity** — an audit-trail entry (item created, moved, merged, labels updated, etc.) tied to the acting user and, optionally, an item and/or location.
+- **Duplicate run / group** — a finished duplicate-finder scan and the candidate groups of possibly-duplicate items it flagged, persisted so a report can be worked through over time. Whether a run is *currently* active is never persisted — it lives only in server memory (see [duplicate finder](#5-duplicate-finder-desktop)).
 
-CREATE TABLE locations (
-    id         INTEGER PRIMARY KEY,
-    code       TEXT NOT NULL UNIQUE,   -- "@" + 3 uppercase-alpha chars, e.g. "@XYZ"
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    created_by INTEGER NOT NULL REFERENCES users(id)
-);
+A few notable design decisions:
 
-CREATE TABLE items (
-    id          INTEGER PRIMARY KEY,
-    asset_tag   TEXT NOT NULL UNIQUE,   -- 4-char uppercase alpha, e.g. "ZKEI" — freed for reuse on hard delete
-    description TEXT,                   -- consolidated description (nullable until generated)
-    location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,   -- at most one location per item
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
+- **Primary image:** no separate "primary image" reference — the lowest-sorted image for an item is its primary image, and the carousel is drag-and-drop reorderable.
+- **Delete:** hard delete, cascading to an item's images — deliberate, so freed asset tags can be reused. No undo/trash.
+- **Duplicate-run concurrency:** kept out of the database entirely — "is a run active" lives in an in-memory, mutex-guarded singleton in the server process. A crash mid-run just loses that attempt; nothing gets stuck, and a finished-run row is written only once the run completes.
+- **Tag vs. label naming:** "tag" is reserved for the physical, OCR-read identifiers (asset tags, location tags); the color-coded, human-assigned pool is called a "label" instead, so the two concepts don't collide in conversation or code.
+- **OCR trust:** raw Gemini reads are never trusted directly — a deterministic shape check plus the registered-tag allow-list catches malformed and misread tags before they can create phantom items or corrupt a reconciliation diff.
 
-CREATE TABLE images (
-    id           INTEGER PRIMARY KEY,
-    item_id      INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
-    data         BLOB NOT NULL,        -- optimized image bytes — same ones sent to Gemini for analysis, no separate full-res original kept
-    content_type TEXT NOT NULL,        -- e.g. "image/jpeg"
-    description  TEXT,                 -- per-image notes: what Gemini read off THIS photo
-    sort_order   INTEGER NOT NULL,     -- drag-and-drop order within the item; lowest = primary image
-    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-    created_by   INTEGER NOT NULL REFERENCES users(id)
-);
+Open questions:
 
--- generic key/value app settings: Gemini model choice, per-request-type prompt overrides,
--- and the auto-generated session secret (only used if SESSION_SECRET isn't set via env).
--- absent key or empty value for a prompt.* key means "use the built-in default".
---   well-known keys: 'gemini_model' | 'session_secret' |
---     'prompt.tag_capture' | 'prompt.location_reconciliation' |
---     'prompt.description_regeneration' | 'prompt.duplicate_detection'
-CREATE TABLE settings (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-
--- one row per reconciliation/move/create/delete/merge/etc, for the "tagged by user" audit trail
-CREATE TABLE activity (
-    id          INTEGER PRIMARY KEY,
-    user_id     INTEGER NOT NULL REFERENCES users(id),
-    action      TEXT NOT NULL,     -- 'item_created' | 'image_added' | 'item_moved' | 'item_removed_from_location' | 'location_reconciled' | 'item_deleted' | 'description_regenerated' | 'duplicate_group_dismissed' | 'items_merged'
-    item_id     INTEGER REFERENCES items(id) ON DELETE SET NULL,
-    location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
-    detail      TEXT,              -- freeform context, e.g. "moved from @QRS" / "merged GKEI, XDKW into ZKEI"
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- history of finished "duplicate finder" runs. Rows are written ONLY once a run finishes —
--- "is a run currently active" is tracked in-memory by the server process (a mutex-guarded
--- singleton), not here, so a crash mid-run never leaves a stuck row blocking future runs.
-CREATE TABLE duplicate_runs (
-    id           INTEGER PRIMARY KEY,
-    status       TEXT NOT NULL,   -- 'completed' | 'failed'
-    started_by   INTEGER NOT NULL REFERENCES users(id),
-    started_at   TEXT NOT NULL,
-    completed_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- one candidate group of possibly-duplicate items per run; persists until resolved or dismissed
-CREATE TABLE duplicate_groups (
-    id            INTEGER PRIMARY KEY,
-    run_id        INTEGER NOT NULL REFERENCES duplicate_runs(id) ON DELETE CASCADE,
-    status        TEXT NOT NULL DEFAULT 'pending',   -- 'pending' | 'resolved' | 'dismissed'
-    reasoning     TEXT,                              -- Gemini's stated reasoning for flagging this group
-    resolved_item_id     INTEGER REFERENCES items(id) ON DELETE SET NULL,     -- asset tag chosen to keep, once merged
-    resolved_location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL, -- location chosen for the merged item
-    resolved_by   INTEGER REFERENCES users(id),
-    resolved_at   TEXT,
-    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- which items Gemini flagged as belonging to a given candidate group
-CREATE TABLE duplicate_group_items (
-    group_id INTEGER NOT NULL REFERENCES duplicate_groups(id) ON DELETE CASCADE,
-    item_id  INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
-    PRIMARY KEY (group_id, item_id)
-);
-
-CREATE INDEX idx_items_location      ON items(location_id);
-CREATE INDEX idx_items_no_desc       ON items(id) WHERE description IS NULL;
-CREATE INDEX idx_images_item         ON images(item_id, sort_order);
-CREATE INDEX idx_activity_item       ON activity(item_id);
-CREATE INDEX idx_activity_location   ON activity(location_id);
-CREATE INDEX idx_duplicate_groups_pending ON duplicate_groups(status) WHERE status = 'pending';
-```
-
-Resolved from earlier drafts:
-
-- **Primary image:** dropped `items.primary_image_id` in favor of `images.sort_order` — the lowest-ordered image for an item is its primary image, and the carousel is drag-and-drop reorderable. No circular FK, no separate "select primary" affordance.
-- **Delete:** confirmed hard-delete (`ON DELETE CASCADE` removes an item's images with it) — deliberate, so freed asset tags can be reused. No undo/trash.
-- **Locations:** confirmed one location per item at a time.
-- **Duplicate-run concurrency:** moved out of the database — "is a run active" lives in an in-memory, mutex-guarded singleton in the server process, not a persisted `'running'` status. A crash mid-run just loses that attempt; nothing gets stuck. `duplicate_runs` rows are written only once a run finishes.
-
-Open questions worth settling before implementation:
-
-- **Does `activity` need a generic `target` (polymorphic) column instead of separate `item_id`/`location_id`?** Fine as-is for two target types; would need rethinking if a third target type shows up.
 - **Duplicate-group staleness:** if an item belongs to more than one *pending* group (e.g. Gemini flags {A,B} and {B,C} in the same or different runs) and one group gets resolved/merged first, what happens to the other pending group referencing the now-deleted item? Leaning toward auto-dismissing any other pending group that references a deleted item, with an activity note — needs confirming.
 - **Merge and descriptions:** when items are merged, does the surviving item's description get auto-regenerated from the combined image set (reusing the "Regenerate description" flow), or left as-is until the user triggers that separately?
 
@@ -302,7 +230,7 @@ WHERE images_fts MATCH ?;
 **Header/nav:** a single shared header on every view — a 📦 brand icon (links home, to search) followed by finger-friendly icon buttons for each section (📷 capture, 🔍 search, 🗺️ locations, 🧬 duplicates, ⚙️ settings, 🚪 sign out). No text hyperlinks, so the same header works as a thumb-friendly mobile toolbar and a desktop nav bar. **Search is the app's home page** (`/`) — the fastest path to "where is X," and the one flow that matters equally on both breakpoints. A matching **footer** on every view (including the sign-in screen) shows the running build's version, from `GET /api/version` — handy for confirming which image actually got deployed.
 
 - **Mobile (iPhone-optimized):** two primary, full-viewport, no-scroll surfaces — **camera capture** (ingest) and **search** (lookup, and the default landing view). Reconciliation diffs and capture feedback appear as overlays rather than pushing the camera off-screen. Mobile search favors image-and-description result cards for fast visual confirmation over dense tables or bulk maintenance.
-- **Desktop:** a denser, power-user layout — search adds filters, select-all, and bulk actions (delete, regenerate description); the location view adds a location sidebar, drag-to-move item cards, and a per-location activity footer; the duplicate finder runs a server-side scan and surfaces a resolvable report; the item edit view adds drag-to-reorder images and a per-item activity log. Built with the assumption of a mouse, keyboard, and a larger viewport — this is where items get maintained, not just found.
+- **Desktop:** a denser, power-user layout — search adds filters (including label filter clouds), select-all, and bulk actions (delete, regenerate description); the location view adds a location sidebar with label filtering, drag-to-move item cards, and a per-location activity footer; the duplicate finder runs a server-side scan and surfaces a resolvable report; the item edit view adds drag-to-reorder images, label editing, and a per-item activity log. Built with the assumption of a mouse, keyboard, and a larger viewport — this is where items get maintained, not just found.
 
 ## Project layout
 
@@ -339,6 +267,14 @@ Configured via environment variables, except the Gemini API key — that lives i
 | `DB_PATH` | Path to the SQLite database file | `./aiinventory.db` |
 | `TLS_ENABLED` | Serve HTTPS with a self-signed certificate | `false` |
 | `SESSION_SECRET` | Key used to cryptographically sign session cookies, so the server can tell a login cookie is genuine rather than forged by a client. Optional — if unset, a random value is generated on first boot and persisted in the `settings` table, so restarts keep working without you managing this by hand. Only set it explicitly if you want sessions to survive a fresh/replaced database. | auto-generated |
+
+There's also one CLI flag, for debugging OCR misreads rather than everyday deployment:
+
+```bash
+aiinventory -store ./scans
+```
+
+When set, every capture/reconcile preview writes the resized image actually sent to Gemini (`<prefix>-<id>.jpg`) plus a `<prefix>-<id>.txt` sidecar listing whatever tags/location tag Gemini reported — unfiltered by the deterministic validation described in [tag capture](#1-camera-capture--tagging-an-item) — into that directory. Off by default; omitting `-store` (or passing an empty value) disables it.
 
 ## Getting started
 
