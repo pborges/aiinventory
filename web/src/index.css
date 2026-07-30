@@ -534,6 +534,13 @@ input[type='radio'] {
   background: #000;
 }
 
+.capture-toolbar {
+  display: flex;
+  align-items: stretch;
+  gap: 0.6rem;
+  max-width: 100%;
+}
+
 .capture-mode-toggle {
   display: flex;
   flex-shrink: 0;
@@ -541,6 +548,26 @@ input[type='radio'] {
   padding: 0.2rem;
   border-radius: 999px;
   background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.capture-accept-description {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.capture-accept-description input[type='checkbox'] {
+  width: 1.35rem;
+  height: 1.35rem;
+  cursor: pointer;
 }
 
 .capture-mode-btn {
@@ -701,6 +728,11 @@ a.capture-result-tag:hover {
 
 .capture-result-description {
   margin: 0.4rem 0 0;
+}
+
+.capture-result-description-rejected {
+  opacity: 0.5;
+  text-decoration: line-through;
 }
 
 .capture-result-diff-list {
@@ -1843,6 +1875,24 @@ button.label-chip:hover {
   border: 1px solid var(--border);
   background: none;
   cursor: pointer;
+}
+
+/* Chrome/Safari and Firefox both inset the actual color swatch inside
+   <input type="color"> behind a wrapper with its own padding/border —
+   without overriding these, the swatch shrinks to a barely-visible sliver
+   instead of filling the control with the selected color. */
+.label-color-custom::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.label-color-custom::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
+.label-color-custom::-moz-color-swatch {
+  border: none;
+  border-radius: 3px;
 }
 
 .settings-label-list {

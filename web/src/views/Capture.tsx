@@ -79,6 +79,10 @@ export function Capture(_props: RouteProps) {
   const [confirmingTagReview, setConfirmingTagReview] = useState(false)
   const [locationTagResolution, setLocationTagResolution] = useState<LocationTagResolutionState | null>(null)
   const [resolvedLocationTag, setResolvedLocationTag] = useState('')
+  // Whether to carry the AI-read description over onto the saved photo —
+  // checked by default the moment a preview with a description comes back,
+  // since it's usually right; unchecking it saves the photo with no notes.
+  const [acceptDescription, setAcceptDescription] = useState(true)
   // resolved tag -> raw OCR read, for any tag that reached the approval
   // modal via a registry correction — carried separately from pendingDiff
   // since /api/reconcile/diff doesn't re-run resolution and can't
@@ -124,6 +128,7 @@ export function Capture(_props: RouteProps) {
     setCorrectedTags({})
     setLocationTagResolution(null)
     setResolvedLocationTag('')
+    setAcceptDescription(true)
     capturedBlobRef.current = null
     setPhase('live')
   }
@@ -328,7 +333,7 @@ export function Capture(_props: RouteProps) {
     if (!pendingCapture || !capturedBlobRef.current || !ASSET_TAG_PATTERN.test(resolvedTag)) return
     setPhase('committing')
     try {
-      await api.captureApply(capturedBlobRef.current, resolvedTag, pendingCapture.description)
+      await api.captureApply(capturedBlobRef.current, resolvedTag, acceptDescription ? pendingCapture.description : '')
       resetToLive() // saved successfully — clear everything and go straight back to a live, ready-to-shoot camera
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Save failed' })
@@ -379,23 +384,36 @@ export function Capture(_props: RouteProps) {
           )}
         </div>
 
-        <div class="capture-mode-toggle" role="group" aria-label="Capture mode">
-          <button
-            type="button"
-            class={'capture-mode-btn' + (mode === 'ingest' ? ' capture-mode-btn-active' : '')}
-            onClick={() => setMode('ingest')}
-            disabled={phase !== 'live'}
-          >
-            <Icon icon={faCamera} /> Ingest item
-          </button>
-          <button
-            type="button"
-            class={'capture-mode-btn' + (mode === 'locate' ? ' capture-mode-btn-active' : '')}
-            onClick={() => setMode('locate')}
-            disabled={phase !== 'live'}
-          >
-            <Icon icon={faMap} /> Locate items
-          </button>
+        <div class="capture-toolbar">
+          <div class="capture-mode-toggle" role="group" aria-label="Capture mode">
+            <button
+              type="button"
+              class={'capture-mode-btn' + (mode === 'ingest' ? ' capture-mode-btn-active' : '')}
+              onClick={() => setMode('ingest')}
+              disabled={phase !== 'live'}
+            >
+              <Icon icon={faCamera} /> Ingest item
+            </button>
+            <button
+              type="button"
+              class={'capture-mode-btn' + (mode === 'locate' ? ' capture-mode-btn-active' : '')}
+              onClick={() => setMode('locate')}
+              disabled={phase !== 'live'}
+            >
+              <Icon icon={faMap} /> Locate items
+            </button>
+          </div>
+
+          {mode === 'ingest' && phase === 'awaiting-accept' && pendingCapture && (
+            <label class="capture-accept-description">
+              <input
+                type="checkbox"
+                checked={acceptDescription}
+                onChange={(e) => setAcceptDescription((e.target as HTMLInputElement).checked)}
+              />
+              Desc
+            </label>
+          )}
         </div>
 
         <div class="capture-results">
@@ -441,7 +459,7 @@ export function Capture(_props: RouteProps) {
                 </div>
               )}
               {pendingCapture.guess && <p class="capture-result-guess">{pendingCapture.guess}</p>}
-              <p class="capture-result-description">
+              <p class={'capture-result-description' + (acceptDescription ? '' : ' capture-result-description-rejected')}>
                 {pendingCapture.description || <em>No notes read from this photo.</em>}
               </p>
               <p class="capture-result-hint">Accept to save, or Cancel to discard this photo.</p>
