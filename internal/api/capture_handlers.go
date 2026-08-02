@@ -190,9 +190,10 @@ func (s *Server) handleCaptureApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	description := r.FormValue("description")
+	setItemDescription := r.FormValue("set_item_description") == "1"
 
 	ctx := r.Context()
-	result, err := inventory.Capture(ctx, s.store, user.ID, true, assetTag, data, contentType, description)
+	result, err := inventory.Capture(ctx, s.store, user.ID, true, assetTag, data, contentType, description, setItemDescription)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return

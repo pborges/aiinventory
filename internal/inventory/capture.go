@@ -23,6 +23,7 @@ type CaptureStore interface {
 	AddImage(ctx context.Context, itemID int64, data []byte, contentType, description string, createdBy int64) (domain.Image, error)
 	LogActivity(ctx context.Context, userID int64, action domain.ActivityAction, itemID, locationID *int64, detail string) error
 	RegisterAssetTag(ctx context.Context, tag string) error
+	UpdateItemDescription(ctx context.Context, id int64, description string) error
 }
 
 type CaptureResult struct {
@@ -36,7 +37,11 @@ type CaptureResult struct {
 // come from gemini.TagCaptureResult; the caller is responsible for calling
 // Gemini first and translating hasAssetTag=false into not calling this at
 // all (or handling ErrNoAssetTag, which this also guards against directly).
-func Capture(ctx context.Context, s CaptureStore, userID int64, hasAssetTag bool, assetTag string, imageData []byte, contentType, imageDescription string) (CaptureResult, error) {
+// The per-image note (imageDescription) is always saved onto the photo;
+// setItemDescription additionally promotes that same text onto the item's
+// consolidated description, skipping the separate RegenerateDescription
+// call for the common case of a single clean read.
+func Capture(ctx context.Context, s CaptureStore, userID int64, hasAssetTag bool, assetTag string, imageData []byte, contentType, imageDescription string, setItemDescription bool) (CaptureResult, error) {
 	if !hasAssetTag || assetTag == "" {
 		return CaptureResult{}, ErrNoAssetTag
 	}
@@ -65,6 +70,16 @@ func Capture(ctx context.Context, s CaptureStore, userID int64, hasAssetTag bool
 	img, err := s.AddImage(ctx, item.ID, imageData, contentType, imageDescription, userID)
 	if err != nil {
 		return CaptureResult{}, fmt.Errorf("add image: %w", err)
+	}
+
+	// Only promote a non-empty note — an unchecked/no-notes photo must never
+	// blank out an item description that a prior regenerate/edit/capture
+	// already set.
+	if setItemDescription && imageDescription != "" {
+		if err := s.UpdateItemDescription(ctx, item.ID, imageDescription); err != nil {
+			return CaptureResult{}, fmt.Errorf("update item description: %w", err)
+		}
+		item.Description = imageDescription
 	}
 
 	action := domain.ActivityImageAdded

@@ -79,10 +79,14 @@ export function Capture(_props: RouteProps) {
   const [confirmingTagReview, setConfirmingTagReview] = useState(false)
   const [locationTagResolution, setLocationTagResolution] = useState<LocationTagResolutionState | null>(null)
   const [resolvedLocationTag, setResolvedLocationTag] = useState('')
-  // Whether to carry the AI-read description over onto the saved photo —
-  // checked by default the moment a preview with a description comes back,
-  // since it's usually right; unchecking it saves the photo with no notes.
-  const [acceptDescription, setAcceptDescription] = useState(true)
+  // The per-photo note Gemini reads is always saved onto the photo.
+  // useAsItemDescription additionally controls whether that same text also
+  // overwrites the item's consolidated description — checked by default so
+  // a single clean capture doesn't need a separate "Regenerate description"
+  // pass; uncheck it to leave the item description untouched (e.g. it's
+  // already a consolidated summary of several photos and this one photo's
+  // note alone would be a worse standalone description).
+  const [useAsItemDescription, setUseAsItemDescription] = useState(true)
   // resolved tag -> raw OCR read, for any tag that reached the approval
   // modal via a registry correction — carried separately from pendingDiff
   // since /api/reconcile/diff doesn't re-run resolution and can't
@@ -139,7 +143,7 @@ export function Capture(_props: RouteProps) {
     setCorrectedTags({})
     setLocationTagResolution(null)
     setResolvedLocationTag('')
-    setAcceptDescription(true)
+    setUseAsItemDescription(true)
     capturedBlobRef.current = null
     setPhase('live')
   }
@@ -351,7 +355,7 @@ export function Capture(_props: RouteProps) {
     if (!pendingCapture || !capturedBlobRef.current || !ASSET_TAG_PATTERN.test(resolvedTag)) return
     setPhase('committing')
     try {
-      await api.captureApply(capturedBlobRef.current, resolvedTag, acceptDescription ? pendingCapture.description : '')
+      await api.captureApply(capturedBlobRef.current, resolvedTag, pendingCapture.description, useAsItemDescription)
       resetToLive() // saved successfully — clear everything and go straight back to a live, ready-to-shoot camera
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Save failed' })
@@ -423,11 +427,11 @@ export function Capture(_props: RouteProps) {
           </div>
 
           {mode === 'ingest' && phase === 'awaiting-accept' && pendingCapture && (
-            <label class="capture-accept-description">
+            <label class="capture-accept-description" title="Also set this photo's note as the item's description">
               <input
                 type="checkbox"
-                checked={acceptDescription}
-                onChange={(e) => setAcceptDescription((e.target as HTMLInputElement).checked)}
+                checked={useAsItemDescription}
+                onChange={(e) => setUseAsItemDescription((e.target as HTMLInputElement).checked)}
               />
               Desc
             </label>
@@ -477,9 +481,14 @@ export function Capture(_props: RouteProps) {
                 </div>
               )}
               {pendingCapture.guess && <p class="capture-result-guess">{pendingCapture.guess}</p>}
-              <p class={'capture-result-description' + (acceptDescription ? '' : ' capture-result-description-rejected')}>
+              <p class="capture-result-description">
                 {pendingCapture.description || <em>No notes read from this photo.</em>}
               </p>
+              {pendingCapture.description && (
+                <p class="capture-result-description-scope">
+                  {useAsItemDescription ? 'Also sets the item description' : 'Saved as a photo note only'}
+                </p>
+              )}
               <p class="capture-result-hint">Accept to save, or Cancel to discard this photo.</p>
             </div>
           )}

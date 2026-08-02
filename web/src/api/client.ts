@@ -257,11 +257,12 @@ export const api = {
     form.set('image', image, 'capture.jpg')
     return upload<CapturePreviewResponse>('/api/capture/preview', form)
   },
-  captureApply: (image: Blob, assetTag: string, description: string) => {
+  captureApply: (image: Blob, assetTag: string, description: string, setItemDescription: boolean) => {
     const form = new FormData()
     form.set('image', image, 'capture.jpg')
     form.set('asset_tag', assetTag)
     form.set('description', description)
+    if (setItemDescription) form.set('set_item_description', '1')
     return upload<CaptureResponse>('/api/capture/apply', form)
   },
   reconcilePreview: (image: Blob) => {

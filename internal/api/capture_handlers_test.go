@@ -166,6 +166,55 @@ func TestCaptureApplyCreatesNewItem(t *testing.T) {
 	}
 }
 
+func TestCaptureApplySetItemDescriptionPromotesNoteToItemDescription(t *testing.T) {
+	fake := &gemini.Fake{
+		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI", Description: "S/N 12345"},
+	}
+	h, cookies, _ := newTestServerWithGemini(t, fake)
+
+	w := doMultipartUpload(t, h, "/api/capture/apply", cookies, []byte("fake-jpeg-bytes"), map[string]string{
+		"asset_tag":            "ZKEI",
+		"description":          "S/N 12345",
+		"set_item_description": "1",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	search := doJSON(t, h, http.MethodGet, "/api/search", nil, cookies)
+	var searchBody struct {
+		Items []itemSummaryResponse `json:"items"`
+	}
+	json.NewDecoder(search.Body).Decode(&searchBody)
+	if len(searchBody.Items) != 1 || searchBody.Items[0].Description != "S/N 12345" {
+		t.Fatalf("items = %+v, want one item with description %q", searchBody.Items, "S/N 12345")
+	}
+}
+
+func TestCaptureApplyWithoutSetItemDescriptionLeavesItemDescriptionEmpty(t *testing.T) {
+	fake := &gemini.Fake{
+		TagCaptureResult: gemini.TagCaptureResult{HasAssetTag: true, AssetTag: "ZKEI", Description: "S/N 12345"},
+	}
+	h, cookies, _ := newTestServerWithGemini(t, fake)
+
+	w := doMultipartUpload(t, h, "/api/capture/apply", cookies, []byte("fake-jpeg-bytes"), map[string]string{
+		"asset_tag":   "ZKEI",
+		"description": "S/N 12345",
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+
+	search := doJSON(t, h, http.MethodGet, "/api/search", nil, cookies)
+	var searchBody struct {
+		Items []itemSummaryResponse `json:"items"`
+	}
+	json.NewDecoder(search.Body).Decode(&searchBody)
+	if len(searchBody.Items) != 1 || searchBody.Items[0].Description != "" {
+		t.Fatalf("items = %+v, want one item with an empty description (note saved on the photo only)", searchBody.Items)
+	}
+}
+
 func TestCaptureApplyRejectsInvalidAssetTag(t *testing.T) {
 	h, cookies, _ := newTestServerWithGemini(t, nil) // apply doesn't need gemini configured
 	w := doMultipartUpload(t, h, "/api/capture/apply", cookies, []byte("photo"), map[string]string{

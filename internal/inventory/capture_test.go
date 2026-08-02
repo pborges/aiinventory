@@ -62,9 +62,20 @@ func (f *fakeCaptureStore) RegisterAssetTag(_ context.Context, tag string) error
 	return nil
 }
 
+func (f *fakeCaptureStore) UpdateItemDescription(_ context.Context, id int64, description string) error {
+	for tag, it := range f.itemsByTag {
+		if it.ID == id {
+			it.Description = description
+			f.itemsByTag[tag] = it
+			return nil
+		}
+	}
+	return store.ErrNotFound
+}
+
 func TestCaptureCreatesNewItem(t *testing.T) {
 	s := newFakeCaptureStore()
-	res, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123")
+	res, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", false)
 	if err != nil {
 		t.Fatalf("Capture: %v", err)
 	}
@@ -81,12 +92,12 @@ func TestCaptureCreatesNewItem(t *testing.T) {
 
 func TestCaptureAppendsToExistingItem(t *testing.T) {
 	s := newFakeCaptureStore()
-	first, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg1"), "image/jpeg", "S/N 123")
+	first, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg1"), "image/jpeg", "S/N 123", false)
 	if err != nil {
 		t.Fatalf("first Capture: %v", err)
 	}
 
-	second, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg2"), "image/jpeg", "model XYZ")
+	second, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg2"), "image/jpeg", "model XYZ", false)
 	if err != nil {
 		t.Fatalf("second Capture: %v", err)
 	}
@@ -107,7 +118,7 @@ func TestCaptureAppendsToExistingItem(t *testing.T) {
 
 func TestCaptureSelfHealsRegistry(t *testing.T) {
 	s := newFakeCaptureStore()
-	if _, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123"); err != nil {
+	if _, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", false); err != nil {
 		t.Fatalf("Capture: %v", err)
 	}
 	if len(s.registeredTag) != 1 || s.registeredTag[0] != "ZKEI" {
@@ -117,11 +128,53 @@ func TestCaptureSelfHealsRegistry(t *testing.T) {
 
 func TestCaptureRejectsMissingAssetTag(t *testing.T) {
 	s := newFakeCaptureStore()
-	_, err := Capture(context.Background(), s, 1, false, "", []byte("jpeg"), "image/jpeg", "")
+	_, err := Capture(context.Background(), s, 1, false, "", []byte("jpeg"), "image/jpeg", "", false)
 	if !errors.Is(err, ErrNoAssetTag) {
 		t.Fatalf("err = %v, want ErrNoAssetTag", err)
 	}
 	if len(s.images) != 0 || len(s.activity) != 0 {
 		t.Fatalf("no item/image/activity should be created when there's no asset tag: images=%v activity=%v", s.images, s.activity)
+	}
+}
+
+func TestCaptureSetItemDescriptionPromotesImageNote(t *testing.T) {
+	s := newFakeCaptureStore()
+	res, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", true)
+	if err != nil {
+		t.Fatalf("Capture: %v", err)
+	}
+	if res.Item.Description != "S/N 123" {
+		t.Errorf("returned Item.Description = %q, want %q", res.Item.Description, "S/N 123")
+	}
+	if got := s.itemsByTag["ZKEI"].Description; got != "S/N 123" {
+		t.Errorf("stored item description = %q, want %q", got, "S/N 123")
+	}
+}
+
+func TestCaptureWithoutSetItemDescriptionLeavesItemDescriptionAlone(t *testing.T) {
+	s := newFakeCaptureStore()
+	res, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", false)
+	if err != nil {
+		t.Fatalf("Capture: %v", err)
+	}
+	if res.Item.Description != "" {
+		t.Errorf("Item.Description = %q, want empty when setItemDescription is false", res.Item.Description)
+	}
+}
+
+func TestCaptureSetItemDescriptionWithNoNotesDoesNotClearExisting(t *testing.T) {
+	s := newFakeCaptureStore()
+	if _, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg1"), "image/jpeg", "S/N 123", true); err != nil {
+		t.Fatalf("first Capture: %v", err)
+	}
+
+	// A second photo of the same item with no readable notes, but the box
+	// still checked — must not blank out the description the first photo set.
+	res, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg2"), "image/jpeg", "", true)
+	if err != nil {
+		t.Fatalf("second Capture: %v", err)
+	}
+	if res.Item.Description != "S/N 123" {
+		t.Errorf("Item.Description = %q, want %q to survive a note-less follow-up capture", res.Item.Description, "S/N 123")
 	}
 }
