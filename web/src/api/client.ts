@@ -241,6 +241,31 @@ export interface UploadRegisteredTagsResponse {
   skipped: number
 }
 
+// TagSheetResponse is a freshly generated, not-yet-registered sheet of
+// tags — the Settings "Generate Asset/Location Tags" preview. Nothing is
+// persisted until the codes are actually registered (see
+// registerAssetTagSheet/registerLocationTagSheet).
+export interface TagSheetResponse {
+  codes: string[]
+  svg: string
+  lbrn2: string
+}
+
+// TagSheetCutSettings is the LightBurn speed/power/air-assist for each of
+// a sheet's three cut operations — baked into the downloaded .lbrn2's
+// CutSetting blocks, purely cosmetic to the SVG preview.
+export interface TagSheetCutSettings {
+  raster_speed_mm_min: number
+  raster_power_pct: number
+  raster_air_assist: boolean
+  outline_speed_mm_min: number
+  outline_power_pct: number
+  outline_air_assist: boolean
+  cut_speed_mm_min: number
+  cut_power_pct: number
+  cut_air_assist: boolean
+}
+
 export const api = {
   version: () => request<{ version: string }>('GET', '/api/version'),
   bootstrapStatus: () => request<{ needed: boolean }>('GET', '/api/auth/bootstrap'),
@@ -352,4 +377,15 @@ export const api = {
     form.set('file', file)
     return upload<UploadRegisteredTagsResponse>('/api/location-tags/upload', form)
   },
+  // codes, when passed, re-renders that exact already-previewed batch
+  // instead of drawing a fresh one — used for a cut-settings-only tweak so
+  // the operator's previewed codes don't reroll out from under them.
+  generateAssetTagSheet: (rows: number, cols: number, paddingMm: number, cutSettings: TagSheetCutSettings, codes?: string[]) =>
+    request<TagSheetResponse>('POST', '/api/tags/sheet', { rows, cols, padding_mm: paddingMm, cut_settings: cutSettings, codes }),
+  registerAssetTagSheet: (codes: string[]) =>
+    request<UploadRegisteredTagsResponse>('POST', '/api/tags/sheet/register', { codes }),
+  generateLocationTagSheet: (rows: number, cols: number, paddingMm: number, cutSettings: TagSheetCutSettings, codes?: string[]) =>
+    request<TagSheetResponse>('POST', '/api/location-tags/sheet', { rows, cols, padding_mm: paddingMm, cut_settings: cutSettings, codes }),
+  registerLocationTagSheet: (codes: string[]) =>
+    request<UploadRegisteredTagsResponse>('POST', '/api/location-tags/sheet/register', { codes }),
 }

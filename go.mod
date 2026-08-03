@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/pressly/goose/v3 v3.27.3
 	golang.org/x/crypto v0.54.0
+	golang.org/x/image v0.44.0
 	google.golang.org/genai v1.65.0
 	modernc.org/sqlite v1.54.0
 )

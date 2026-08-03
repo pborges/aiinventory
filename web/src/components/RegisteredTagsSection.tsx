@@ -9,6 +9,11 @@ interface Props {
   create: (tag: string) => Promise<{ tag: RegisteredTagEntry }>
   remove: (id: number) => Promise<void>
   upload: (file: File) => Promise<UploadRegisteredTagsResponse>
+  // Bumping this forces a reload — how the Generate-tags section's batch
+  // registrations (which don't go through create()/upload() above) get
+  // reflected here without this component needing to know anything about
+  // where else the registry can change.
+  refreshKey?: number
 }
 
 /** Simple registry CRUD — create, bulk-create (.txt upload), list, delete;
@@ -18,7 +23,7 @@ interface Props {
  * over two separate tables. Delete is immediate/non-confirming, same as
  * ItemDetail's per-photo delete — a registry entry's blast radius is just
  * its own membership row, trivially reversible by re-adding it. */
-export function RegisteredTagsSection({ title, pattern, placeholder, list, create, remove, upload }: Props) {
+export function RegisteredTagsSection({ title, pattern, placeholder, list, create, remove, upload, refreshKey }: Props) {
   const [tags, setTags] = useState<RegisteredTagEntry[] | null>(null)
   const [newTag, setNewTag] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -29,7 +34,7 @@ export function RegisteredTagsSection({ title, pattern, placeholder, list, creat
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [refreshKey])
 
   function load() {
     list()

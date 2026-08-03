@@ -5,19 +5,28 @@ import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { LabelManagerSection } from '../components/LabelManagerSection'
 import { RegisteredTagsSection } from '../components/RegisteredTagsSection'
+import { GenerateTagsSection } from '../components/GenerateTagsSection'
 
 interface RouteProps {
   path?: string
   default?: boolean
 }
 
-type SettingsSection = 'gemini' | 'users' | 'asset-tags' | 'location-tags'
+type SettingsSection =
+  | 'gemini'
+  | 'users'
+  | 'asset-tags'
+  | 'generate-asset-tags'
+  | 'location-tags'
+  | 'generate-location-tags'
 
 const SETTINGS_SECTIONS: { key: SettingsSection; label: string }[] = [
   { key: 'gemini', label: 'Gemini configuration' },
   { key: 'users', label: 'Users' },
   { key: 'asset-tags', label: 'Asset Tags' },
+  { key: 'generate-asset-tags', label: 'Generate Asset Tags' },
   { key: 'location-tags', label: 'Location Tags' },
+  { key: 'generate-location-tags', label: 'Generate Location Tags' },
 ]
 
 const ASSET_TAG_PATTERN = /^[A-Z]{4}$/
@@ -58,6 +67,11 @@ export function Settings(_props: RouteProps) {
   const [newPassword, setNewPassword] = useState('')
   const [userError, setUserError] = useState<string | null>(null)
   const [userBusy, setUserBusy] = useState(false)
+
+  // Bumped after a Generate-tags batch registration so each pane's
+  // RegisteredTagsSection reloads its list — see refreshKey on that component.
+  const [assetTagsRefreshKey, setAssetTagsRefreshKey] = useState(0)
+  const [locationTagsRefreshKey, setLocationTagsRefreshKey] = useState(0)
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -314,8 +328,19 @@ export function Settings(_props: RouteProps) {
                     create={api.createRegisteredAssetTag}
                     remove={api.deleteRegisteredAssetTag}
                     upload={api.uploadRegisteredAssetTags}
+                    refreshKey={assetTagsRefreshKey}
                   />
                 </>
+              )}
+
+              {section === 'generate-asset-tags' && (
+                <GenerateTagsSection
+                  title="Generate Asset Tags"
+                  generate={api.generateAssetTagSheet}
+                  register={api.registerAssetTagSheet}
+                  fileBaseName="asset-tags"
+                  onRegistered={() => setAssetTagsRefreshKey((k) => k + 1)}
+                />
               )}
 
               {section === 'location-tags' && (
@@ -336,8 +361,19 @@ export function Settings(_props: RouteProps) {
                     create={api.createRegisteredLocationTag}
                     remove={api.deleteRegisteredLocationTag}
                     upload={api.uploadRegisteredLocationTags}
+                    refreshKey={locationTagsRefreshKey}
                   />
                 </>
+              )}
+
+              {section === 'generate-location-tags' && (
+                <GenerateTagsSection
+                  title="Generate Location Tags"
+                  generate={api.generateLocationTagSheet}
+                  register={api.registerLocationTagSheet}
+                  fileBaseName="location-tags"
+                  onRegistered={() => setLocationTagsRefreshKey((k) => k + 1)}
+                />
               )}
             </div>
           </main>

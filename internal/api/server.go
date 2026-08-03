@@ -100,11 +100,15 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStor
 	mux.Handle("POST /api/tags", srv.requireAuth(srv.handleCreateRegisteredAssetTag))
 	mux.Handle("DELETE /api/tags/{id}", srv.requireAuth(srv.handleDeleteRegisteredAssetTag))
 	mux.Handle("POST /api/tags/upload", srv.requireAuth(srv.handleUploadRegisteredAssetTags))
+	mux.Handle("POST /api/tags/sheet", srv.requireAuth(srv.handleGenerateAssetTagSheet))
+	mux.Handle("POST /api/tags/sheet/register", srv.requireAuth(srv.handleRegisterAssetTagSheet))
 
 	mux.Handle("GET /api/location-tags", srv.requireAuth(srv.handleListRegisteredLocationTags))
 	mux.Handle("POST /api/location-tags", srv.requireAuth(srv.handleCreateRegisteredLocationTag))
 	mux.Handle("DELETE /api/location-tags/{id}", srv.requireAuth(srv.handleDeleteRegisteredLocationTag))
 	mux.Handle("POST /api/location-tags/upload", srv.requireAuth(srv.handleUploadRegisteredLocationTags))
+	mux.Handle("POST /api/location-tags/sheet", srv.requireAuth(srv.handleGenerateLocationTagSheet))
+	mux.Handle("POST /api/location-tags/sheet/register", srv.requireAuth(srv.handleRegisterLocationTagSheet))
 
 	mux.Handle("/", web.Handler())
 

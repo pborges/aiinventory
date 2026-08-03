@@ -2022,3 +2022,102 @@ button.label-chip:hover {
   font-size: 0.85rem;
 }
 
+.generate-tags-form {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.generate-tags-form label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.generate-tags-form button {
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+.generate-tags-field {
+  width: 4.5rem;
+  padding: 0.3rem;
+  font: inherit;
+}
+
+.generate-tags-unit {
+  position: relative;
+}
+
+.generate-tags-unit span {
+  display: inline-flex;
+  opacity: 0.7;
+}
+
+.generate-tags-cutsettings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.generate-tags-cutsettings-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.generate-tags-cutsettings-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.generate-tags-cutsettings-label {
+  width: 6.5rem;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.generate-tags-preview {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.generate-tags-preview img {
+  display: block;
+  width: 100%;
+}
+
+.generate-tags-preview p {
+  margin: 0;
+  color: #666;
+  text-align: center;
+}
+
+.generate-tags-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.generate-tags-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+
