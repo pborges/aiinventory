@@ -26,9 +26,10 @@ function downloadText(filename: string, content: string, mime: string) {
  * (debounced as the grid/padding change), per-operation LightBurn speed/
  * power/air-assist fields (defaulted for a 20W diode laser on 3mm
  * basswood, re-rendered into the same previewed codes when tweaked), a
- * checkbox per export format plus a "Register Tags" checkbox, and a single
- * Download button that does whichever of those are checked — the
- * one-click replacement for the old manual FreeCAD/LightBurn workflow.
+ * per-code checkbox grid (pre-checked) so codes that didn't cut well can
+ * be excluded, a Download button for the SVG/LBRN2 export checkboxes, and
+ * a separate Register button that commits only the checked codes — the
+ * intended flow is download, cut, uncheck any that failed, then register.
  * Settings uses this for both the asset-tag and location-tag panes, which
  * differ only in which api.* methods and geometry get passed in. */
 // DEFAULT_ROWS/COLS/PADDING_MM: the largest 60x26mm grid (at a
@@ -59,10 +60,19 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [downloadSvg, setDownloadSvg] = useState(false)
   const [downloadLbrn2, setDownloadLbrn2] = useState(true)
-  const [registerTags, setRegisterTags] = useState(true)
+  const [checkedCodes, setCheckedCodes] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+
+  function toggleCode(code: string, checked: boolean) {
+    setCheckedCodes((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(code)
+      else next.delete(code)
+      return next
+    })
+  }
 
   function cutSettingsPayload(): TagSheetCutSettings {
     return {
@@ -123,19 +133,18 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
     return () => URL.revokeObjectURL(url)
   }, [sheet])
 
+  // A freshly (re)generated sheet's codes start all checked — the operator
+  // unchecks the ones that didn't cut well before hitting Register.
+  useEffect(() => {
+    setCheckedCodes(new Set(sheet?.codes ?? []))
+  }, [sheet])
+
   async function onDownload() {
     if (!sheet) return
     setBusy(true)
     setError(null)
     setStatus(null)
     try {
-      let statusMsg = ''
-      if (registerTags) {
-        const res = await register(sheet.codes)
-        statusMsg = `Registered ${res.added} tags (${res.skipped} skipped). `
-        onRegistered()
-      }
-
       const dateStamp = new Date().toISOString().slice(0, 10)
       const downloaded: string[] = []
       if (downloadSvg) {
@@ -146,14 +155,30 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
         downloadText(`${fileBaseName}-${dateStamp}.lbrn2`, sheet.lbrn2, 'application/xml')
         downloaded.push('LBRN2')
       }
-      if (downloaded.length) statusMsg += `Downloaded ${downloaded.join(' + ')}.`
-      setStatus(statusMsg.trim())
+      if (downloaded.length) setStatus(`Downloaded ${downloaded.join(' + ')}.`)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to download')
+    } finally {
+      setBusy(false)
+    }
+  }
 
+  async function onRegister() {
+    if (!sheet) return
+    const codes = sheet.codes.filter((code) => checkedCodes.has(code))
+    if (!codes.length) return
+    setBusy(true)
+    setError(null)
+    setStatus(null)
+    try {
+      const res = await register(codes)
+      setStatus(`Registered ${res.added} tags (${res.skipped} skipped).`)
+      onRegistered()
       // Once registered, the previewed codes are no longer available —
       // reroll so a stale set can't be re-registered by clicking again.
-      if (registerTags) regenerate()
+      regenerate()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to complete the requested action')
+      setError(err instanceof ApiError ? err.message : 'Failed to register tags')
     } finally {
       setBusy(false)
     }
@@ -310,6 +335,21 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
         {previewUrl ? <img src={previewUrl} alt={`${title} preview`} /> : <p>Generating preview…</p>}
       </div>
 
+      {sheet && sheet.codes.length > 0 && (
+        <div class="generate-tags-codes">
+          {sheet.codes.map((code) => (
+            <label class="generate-tags-checkbox" key={code}>
+              <input
+                type="checkbox"
+                checked={checkedCodes.has(code)}
+                onChange={(e) => toggleCode(code, (e.target as HTMLInputElement).checked)}
+              />
+              {code}
+            </label>
+          ))}
+        </div>
+      )}
+
       <div class="generate-tags-actions">
         <label class="generate-tags-checkbox">
           <input type="checkbox" checked={downloadSvg} onChange={(e) => setDownloadSvg((e.target as HTMLInputElement).checked)} />
@@ -323,27 +363,17 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
           />
           LBRN2
         </label>
-        <label class="generate-tags-checkbox">
-          <input
-            type="checkbox"
-            checked={registerTags}
-            onChange={(e) => setRegisterTags((e.target as HTMLInputElement).checked)}
-          />
-          Register Tags
-        </label>
-        <button
-          type="button"
-          class="btn-primary"
-          onClick={onDownload}
-          disabled={busy || !sheet || (!downloadSvg && !downloadLbrn2 && !registerTags)}
-        >
+        <button type="button" class="btn-primary" onClick={onDownload} disabled={busy || !sheet || (!downloadSvg && !downloadLbrn2)}>
           Download
+        </button>
+        <button type="button" class="btn-primary" onClick={onRegister} disabled={busy || !sheet || checkedCodes.size === 0}>
+          Register
         </button>
       </div>
       <p class="settings-status">
-        Speeds/powers default for a 20W diode laser on 3mm basswood — tune per material/machine in LightBurn. Register
-        Tags commits the previewed codes to the registry above so they won't be generated again. Downloading both file
-        formats may trigger Chrome's one-time multiple-downloads prompt.
+        Speeds/powers default for a 20W diode laser on 3mm basswood — tune per material/machine in LightBurn. Download,
+        cut the sheet, uncheck any codes that didn't cut well, then Register to commit the rest to the registry above.
+        Downloading both file formats may trigger Chrome's one-time multiple-downloads prompt.
       </p>
       {status && <p class="settings-status">{status}</p>}
       {error && <p class="settings-status settings-status-error">{error}</p>}

@@ -2107,6 +2107,18 @@ button.label-chip:hover {
   text-align: center;
 }
 
+.generate-tags-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+  gap: 0.4rem 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
 .generate-tags-actions {
   display: flex;
   align-items: center;
