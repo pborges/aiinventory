@@ -135,12 +135,13 @@ export function LocationView(_props: RouteProps) {
       <Header active="locations" />
 
       <div class="sidebar-page-layout">
-        <aside class="sidebar-page-sidebar">
+        <aside class={'sidebar-page-sidebar' + (sidebarOpen ? '' : ' sidebar-page-sidebar-collapsed')}>
           <button
             type="button"
             class="sidebar-page-sidebar-toggle"
             onClick={() => setSidebarOpen((v) => !v)}
             aria-expanded={sidebarOpen}
+            title="Locations"
           >
             <h2>Locations{selected ? `: ${selected.location_tag}` : ''}</h2>
             <Icon icon={sidebarOpen ? faChevronUp : faChevronDown} />

@@ -1601,6 +1601,22 @@ a.capture-result-tag:hover {
     border-bottom: none;
     padding: 1rem;
   }
+
+  /* Collapsed: shrink the whole sidebar down to a narrow rail instead of
+     just hiding the location list inside a full-width box. */
+  .sidebar-page-sidebar-collapsed {
+    min-width: 0;
+    padding: 1rem 0.6rem;
+  }
+
+  .sidebar-page-sidebar-collapsed .sidebar-page-sidebar-toggle {
+    justify-content: center;
+    margin-bottom: 0;
+  }
+
+  .sidebar-page-sidebar-collapsed .sidebar-page-sidebar-toggle h2 {
+    display: none;
+  }
 }
 
 /* --- duplicate finder (desktop, README flow #5) --- */
@@ -1867,8 +1883,12 @@ button.label-chip:hover {
   align-items: center;
   gap: 0.5rem;
   width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
   font-size: 0.9rem;
   font-weight: 600;
+  text-align: left;
 }
 
 .search-label-filters-toggle .icon {
@@ -1892,7 +1912,6 @@ button.label-chip:hover {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  margin-top: 0.6rem;
   border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
   border-radius: 8px;
   padding: 0.85rem 1rem;

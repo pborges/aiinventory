@@ -187,7 +187,7 @@ export function Search(_props: RouteProps) {
         </div>
 
         {(allLocationLabels.length > 0 || allLabels.length > 0) && (
-          <div class="search-label-filters">
+          <div class="search-label-filters-card">
             <button
               type="button"
               class="search-label-filters-toggle"
@@ -201,7 +201,7 @@ export function Search(_props: RouteProps) {
               <Icon icon={filtersOpen ? faChevronUp : faChevronDown} />
             </button>
             {filtersOpen && (
-              <div class="search-label-filters-card">
+              <>
                 {allLocationLabels.length > 0 && (
                   <div class="search-label-filters-section">
                     <h3 class="search-label-filters-label">Location labels</h3>
@@ -227,7 +227,7 @@ export function Search(_props: RouteProps) {
                     </div>
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         )}
