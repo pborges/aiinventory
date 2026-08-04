@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'preact/hooks'
+import { faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons'
 import { api, ApiError, formatLocationTag, type ActivityEntry, type Location, type LocationItem, type Label } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
+import { Icon } from '../components/Icon'
 import { LabelChip } from '../components/LabelChip'
 import { HoverPreview, useHoverPreview } from '../lib/hoverPreview'
 
@@ -30,6 +32,7 @@ export function LocationView(_props: RouteProps) {
   const [allLocationLabels, setAllLocationLabels] = useState<Label[]>([])
   const [selectedLabelFilterIds, setSelectedLabelFilterIds] = useState<Set<number>>(new Set())
   const [labelsBusy, setLabelsBusy] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 800px)').matches)
   const { preview: hoverPreview, showHoverPreview, hideHoverPreview } = useHoverPreview()
 
   useEffect(() => {
@@ -53,6 +56,7 @@ export function LocationView(_props: RouteProps) {
     setDescriptionInput(loc.description ?? '')
     setLoading(true)
     setError(null)
+    if (!window.matchMedia('(min-width: 800px)').matches) setSidebarOpen(false)
     Promise.all([api.getLocationItems(loc.id), api.getLocationActivity(loc.id)])
       .then(([itemsRes, activityRes]) => {
         setItems(itemsRes.items)
@@ -132,46 +136,58 @@ export function LocationView(_props: RouteProps) {
 
       <div class="sidebar-page-layout">
         <aside class="sidebar-page-sidebar">
-          <h2>Locations</h2>
-          {allLocationLabels.length > 0 && (
-            <div class="label-cloud location-sidebar-label-filter">
-              {allLocationLabels.map((label) => (
-                <LabelChip
-                  key={label.id}
-                  label={label}
-                  selected={selectedLabelFilterIds.has(label.id)}
-                  onClick={() => toggleLabelFilter(label.id)}
-                />
-              ))}
-            </div>
+          <button
+            type="button"
+            class="sidebar-page-sidebar-toggle"
+            onClick={() => setSidebarOpen((v) => !v)}
+            aria-expanded={sidebarOpen}
+          >
+            <h2>Locations{selected ? `: ${selected.location_tag}` : ''}</h2>
+            <Icon icon={sidebarOpen ? faChevronUp : faChevronDown} />
+          </button>
+          {sidebarOpen && (
+            <>
+              {allLocationLabels.length > 0 && (
+                <div class="label-cloud location-sidebar-label-filter">
+                  {allLocationLabels.map((label) => (
+                    <LabelChip
+                      key={label.id}
+                      label={label}
+                      selected={selectedLabelFilterIds.has(label.id)}
+                      onClick={() => toggleLabelFilter(label.id)}
+                    />
+                  ))}
+                </div>
+              )}
+              <ul>
+                {visibleLocations.map((loc) => (
+                  <li
+                    key={loc.id}
+                    class={
+                      'location-sidebar-item' +
+                      (selected?.id === loc.id ? ' location-sidebar-item-active' : '') +
+                      (dragOverId === loc.id ? ' location-sidebar-item-dragover' : '')
+                    }
+                    onClick={() => selectLocation(loc)}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setDragOverId(loc.id)
+                    }}
+                    onDragLeave={() => setDragOverId(null)}
+                    onDrop={(e) => onDropOnLocation(loc, e)}
+                  >
+                    <div class="location-sidebar-tag">{loc.location_tag}</div>
+                    {loc.description && <div class="location-sidebar-desc">{loc.description}</div>}
+                  </li>
+                ))}
+                {visibleLocations.length === 0 && (
+                  <li class="location-sidebar-empty">
+                    {locations.length === 0 ? 'No locations yet.' : 'No locations match the selected tags.'}
+                  </li>
+                )}
+              </ul>
+            </>
           )}
-          <ul>
-            {visibleLocations.map((loc) => (
-              <li
-                key={loc.id}
-                class={
-                  'location-sidebar-item' +
-                  (selected?.id === loc.id ? ' location-sidebar-item-active' : '') +
-                  (dragOverId === loc.id ? ' location-sidebar-item-dragover' : '')
-                }
-                onClick={() => selectLocation(loc)}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  setDragOverId(loc.id)
-                }}
-                onDragLeave={() => setDragOverId(null)}
-                onDrop={(e) => onDropOnLocation(loc, e)}
-              >
-                <div class="location-sidebar-tag">{loc.location_tag}</div>
-                {loc.description && <div class="location-sidebar-desc">{loc.description}</div>}
-              </li>
-            ))}
-            {visibleLocations.length === 0 && (
-              <li class="location-sidebar-empty">
-                {locations.length === 0 ? 'No locations yet.' : 'No locations match the selected tags.'}
-              </li>
-            )}
-          </ul>
         </aside>
 
         <main class="sidebar-page-main">

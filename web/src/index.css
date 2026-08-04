@@ -1414,23 +1414,37 @@ a.capture-result-tag:hover {
 
 /* --- location view (desktop, README flow #4) --- */
 
+/* Mobile: sidebar stacks above the main content and starts collapsed (see
+   LocationView's sidebarOpen state). Desktop (see @media below) restores
+   the side-by-side layout with a fixed-width sidebar. */
 .sidebar-page-layout {
   display: flex;
+  flex-direction: column;
   min-height: calc(100dvh - 3.5rem);
 }
 
 .sidebar-page-sidebar {
-  width: fit-content;
-  min-width: 12rem;
-  max-width: 20rem;
-  flex-shrink: 0;
-  border-right: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-  padding: 1rem;
+  width: 100%;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  padding: 0.75rem 1rem;
 }
 
-.sidebar-page-sidebar h2 {
+.sidebar-page-sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: 0.75rem;
+  text-align: left;
+}
+
+.sidebar-page-sidebar-toggle h2 {
   font-size: 1rem;
-  margin-top: 0;
+  margin: 0;
 }
 
 .location-sidebar-label-filter {
@@ -1569,6 +1583,24 @@ a.capture-result-tag:hover {
 .location-activity-footer h3 {
   margin-top: 0;
   font-size: 0.95rem;
+}
+
+/* Desktop: sidebar sits beside the main content, fixed-width, and starts
+   expanded (see LocationView's sidebarOpen state). */
+@media (min-width: 800px) {
+  .sidebar-page-layout {
+    flex-direction: row;
+  }
+
+  .sidebar-page-sidebar {
+    width: fit-content;
+    min-width: 12rem;
+    max-width: 20rem;
+    flex-shrink: 0;
+    border-right: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+    border-bottom: none;
+    padding: 1rem;
+  }
 }
 
 /* --- duplicate finder (desktop, README flow #5) --- */
@@ -1830,10 +1862,37 @@ button.label-chip:hover {
   flex-shrink: 0;
 }
 
+.search-label-filters-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.search-label-filters-toggle .icon {
+  margin-left: auto;
+}
+
+.search-label-filters-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.3em;
+  padding: 0 0.35em;
+  border-radius: 999px;
+  background: var(--accent-blue);
+  color: var(--bg);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .search-label-filters-card {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  margin-top: 0.6rem;
   border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
   border-radius: 8px;
   padding: 0.85rem 1rem;

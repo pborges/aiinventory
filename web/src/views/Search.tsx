@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { faLocationDot, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faChevronDown, faChevronUp, faLocationDot, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { api, ApiError, formatLocationTag, type ItemSummary, type Label } from '../api/client'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
@@ -34,6 +34,7 @@ export function Search(_props: RouteProps) {
   const [selectedLabelIds, setSelectedLabelIds] = useState<Set<number>>(new Set())
   const [allLocationLabels, setAllLocationLabels] = useState<Label[]>([])
   const [selectedLocationLabelIds, setSelectedLocationLabelIds] = useState<Set<number>>(new Set())
+  const [filtersOpen, setFiltersOpen] = useState(() => window.matchMedia('(min-width: 800px)').matches)
   const [items, setItems] = useState<ItemSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -186,30 +187,46 @@ export function Search(_props: RouteProps) {
         </div>
 
         {(allLocationLabels.length > 0 || allLabels.length > 0) && (
-          <div class="search-label-filters-card">
-            {allLocationLabels.length > 0 && (
-              <div class="search-label-filters-section">
-                <h3 class="search-label-filters-label">Location labels</h3>
-                <div class="label-cloud search-label-filter">
-                  {allLocationLabels.map((label) => (
-                    <LabelChip
-                      key={label.id}
-                      label={label}
-                      selected={selectedLocationLabelIds.has(label.id)}
-                      onClick={() => toggleLocationLabelFilter(label.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-            {allLabels.length > 0 && (
-              <div class="search-label-filters-section">
-                <h3 class="search-label-filters-label">Item labels</h3>
-                <div class="label-cloud search-label-filter">
-                  {allLabels.map((label) => (
-                    <LabelChip key={label.id} label={label} selected={selectedLabelIds.has(label.id)} onClick={() => toggleLabelFilter(label.id)} />
-                  ))}
-                </div>
+          <div class="search-label-filters">
+            <button
+              type="button"
+              class="search-label-filters-toggle"
+              onClick={() => setFiltersOpen((v) => !v)}
+              aria-expanded={filtersOpen}
+            >
+              Tag filters
+              {selectedLabelIds.size + selectedLocationLabelIds.size > 0 && (
+                <span class="search-label-filters-count">{selectedLabelIds.size + selectedLocationLabelIds.size}</span>
+              )}
+              <Icon icon={filtersOpen ? faChevronUp : faChevronDown} />
+            </button>
+            {filtersOpen && (
+              <div class="search-label-filters-card">
+                {allLocationLabels.length > 0 && (
+                  <div class="search-label-filters-section">
+                    <h3 class="search-label-filters-label">Location labels</h3>
+                    <div class="label-cloud search-label-filter">
+                      {allLocationLabels.map((label) => (
+                        <LabelChip
+                          key={label.id}
+                          label={label}
+                          selected={selectedLocationLabelIds.has(label.id)}
+                          onClick={() => toggleLocationLabelFilter(label.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {allLabels.length > 0 && (
+                  <div class="search-label-filters-section">
+                    <h3 class="search-label-filters-label">Item labels</h3>
+                    <div class="label-cloud search-label-filter">
+                      {allLabels.map((label) => (
+                        <LabelChip key={label.id} label={label} selected={selectedLabelIds.has(label.id)} onClick={() => toggleLabelFilter(label.id)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
