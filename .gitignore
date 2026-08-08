@@ -1,5 +1,7 @@
 # Go
 /aiinventory
+/go.work
+/go.work.sum
 
 # local database files
 *.db
