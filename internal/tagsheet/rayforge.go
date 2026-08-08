@@ -21,19 +21,24 @@ import (
 //
 // The shape below targets the installed macOS app (v1.8.5 per its
 // version.txt), NOT Rayforge's github.com/barebaric/rayforge "main"
-// branch — main has already refactored Step's schema (flat power/speed
-// fields, no opsproducer_dict) ahead of what's actually shipped. A
-// first attempt built against main's schema loaded three layers but
-// failed with "KeyError: 'opsproducer_dict'" (visible in
-// ~/Library/Logs/rayforge/session-*.log, raised from
-// rayforge/core/step.py's from_dict via
-// laser_essentials/steps/raster_step.py's EngraveStep.from_dict). This
-// version was instead reverse engineered from that traceback plus
-// Rayforge's own bundled test fixtures (tests/assets/*.ryp in its git
-// history) — real, CI-verified project files using the same
-// step_type-tagged-but-opsproducer_dict-wrapped hybrid shape the
-// installed app expects (see tests/assets/rotary.ryp and tabs.ryp for
-// worked ContourStep/EngraveStep examples).
+// branch, which several rounds of testing (loading generated files in
+// the real app, and inspecting a real project the app itself saved)
+// showed disagreeing with the installed build on multiple field names
+// and a couple of enum values — main is ahead of what's actually
+// shipped. The installed app still writes a step's speed/power/mode
+// settings as flat top-level fields (that's the primary path each step
+// subclass's from_dict reads first) AND an opsproducer_dict (a
+// vestigial pre-refactor payload — present in every real save, its
+// own values don't need to agree with the top-level ones since nothing
+// appears to read them back once the flat fields exist, but the key
+// itself is a hard requirement: rayforge/core/step.py's from_dict
+// does an unguarded data["opsproducer_dict"] before a subclass ever
+// gets a say, so omitting it entirely crashes the load with
+// "KeyError: 'opsproducer_dict'"). This shape — and the exact flat
+// field names/values for EngraveStep, which don't all match either
+// Rayforge's git history or its own class source — came from a real
+// project.json the installed app wrote after importing a generated
+// sheet and adjusting settings by hand.
 //
 // It produces three layers, one per cut operation (mirroring
 // RenderSVG's three groups and RenderLBRN2's three CutSettings): a
@@ -67,11 +72,11 @@ func RenderRayforge(sheet Sheet, cs CutSettings) ([]byte, error) {
 		"type":               "doc",
 		"active_layer_index": 0,
 		"children": []any{
-			rayforgeLayer(sheet, "Raster Text", "text-fill", fillPaths, assetUID,
+			rayforgeLayer(sheet, "Raster Text", "#00ccff", "text-fill", fillPaths, assetUID,
 				engraveStepDict("Raster Text Engrave", cs.RasterSpeedMmMin, cs.RasterPowerPct, cs.RasterAirAssist)),
-			rayforgeLayer(sheet, "Outline Text", "text-outline", outlinePaths, assetUID,
+			rayforgeLayer(sheet, "Outline Text", "#ff6600", "text-outline", outlinePaths, assetUID,
 				contourStepDict("Outline Text Cut", cs.OutlineSpeedMmMin, cs.OutlinePowerPct, cs.OutlineAirAssist, "CENTERLINE")),
-			rayforgeLayer(sheet, "Cut Tag", "cut", cutPaths, assetUID,
+			rayforgeLayer(sheet, "Cut Tag", "#33cc33", "cut", cutPaths, assetUID,
 				contourStepDict("Cut Tag Border", cs.CutSpeedMmMin, cs.CutPowerPct, cs.CutAirAssist, "OUTSIDE")),
 		},
 		"assets": []any{
@@ -82,12 +87,14 @@ func RenderRayforge(sheet Sheet, cs CutSettings) ([]byte, error) {
 				"source_file":      "tag-sheet.svg",
 				"original_data":    base64.StdEncoding.EncodeToString([]byte(svgSource)),
 				"base_render_data": nil,
+				"thumbnail_data":   nil,
 				"renderer_name":    "SvgRenderer",
 				"metadata":         map[string]any{},
 				"width_px":         nil,
 				"height_px":        nil,
 				"width_mm":         sheet.WidthMm,
 				"height_mm":        sheet.HeightMm,
+				"hidden":           false,
 			},
 		},
 	}
@@ -116,10 +123,9 @@ var identityMatrix = [3][3]float64{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
 
 // rayforgeLayer builds one Layer dict — a Workflow (wrapping the given
 // step) plus a WorkPiece positioned at paths' bounding box, both parented
-// under the layer, matching the {uid, type, name, matrix, visible,
-// stock_item_uid, children:[workflow, workpiece]} shape Layer.to_dict
-// produces in the installed app.
-func rayforgeLayer(sheet Sheet, name, svgLayerID string, paths []Path, assetUID string, step map[string]any) map[string]any {
+// under the layer, matching the shape Layer.to_dict produces in the
+// installed app.
+func rayforgeLayer(sheet Sheet, name, color, svgLayerID string, paths []Path, assetUID string, step map[string]any) map[string]any {
 	commands, minX, minY, maxX, maxY := pathsToCommands(paths)
 	bw, bh := maxX-minX, maxY-minY
 
@@ -155,23 +161,25 @@ func rayforgeLayer(sheet Sheet, name, svgLayerID string, paths []Path, assetUID 
 				// re-vectorizes from the source asset; pristine_geometry
 				// below is what actually loads.
 				"active_layer_ids":  []string{svgLayerID},
-				"create_new_layers": false,
+				"layer_import_mode": "flatten",
 				"trim_padding":      0.01,
+				"ppi":               96.0,
 			},
 			"crop_window_px":    [4]float64{minX, minY, bw, bh},
 			"cropped_width_mm":  bw,
 			"cropped_height_mm": bh,
 			"layer_id":          nil,
 			"pristine_geometry": map[string]any{
-				"last_move_to": [3]float64{0, 0, 0},
-				"commands":     commands,
+				"last_move_to":     [3]float64{0, 0, 0},
+				"uniform_scalable": true,
+				"commands":         commands,
 			},
 			"normalization_matrix": normMatrix,
 		},
-		"edited_boundaries": nil,
-		"sketch_uid":        nil,
-		"sketch_params":     map[string]any{},
-		"source_asset_uid":  nil,
+		"edited_boundaries":        nil,
+		"geometry_provider_uid":    nil,
+		"geometry_provider_params": map[string]any{},
+		"source_asset_uid":         nil,
 	}
 
 	workflow := map[string]any{
@@ -183,13 +191,18 @@ func rayforgeLayer(sheet Sheet, name, svgLayerID string, paths []Path, assetUID 
 	}
 
 	return map[string]any{
-		"uid":            uuid.NewString(),
-		"type":           "layer",
-		"name":           name,
-		"matrix":         identityMatrix,
-		"visible":        true,
-		"stock_item_uid": nil,
-		"children":       []any{workflow, workpiece},
+		"uid":               uuid.NewString(),
+		"type":              "layer",
+		"name":              name,
+		"matrix":            identityMatrix,
+		"visible":           true,
+		"rotary_enabled":    false,
+		"rotary_diameter":   25.0,
+		"rotary_module_uid": nil,
+		"color":             color,
+		"wcs":               nil,
+		"stock_item_uid":    nil,
+		"children":          []any{workflow, workpiece},
 	}
 }
 
@@ -239,7 +252,7 @@ func baseStepFields(stepType, name, typelabel string, capabilities []string, spe
 		"per_step_transformers_dicts":      []any{},
 		"pixels_per_mm":                    [2]int{50, 50},
 		"power":                            powerPct / 100,
-		"max_power":                        1000,
+		"max_power":                        1.0,
 		"cut_speed":                        speedMmMin,
 		"max_cut_speed":                    10000,
 		"travel_speed":                     5000,
@@ -247,6 +260,8 @@ func baseStepFields(stepType, name, typelabel string, capabilities []string, spe
 		"air_assist":                       airAssist,
 		"kerf_mm":                          0.0,
 		"tab_power":                        0.0,
+		"frequency":                        0,
+		"pulse_width":                      0,
 		"children":                         []any{},
 	}
 	maps.Copy(d, extra)
@@ -261,7 +276,12 @@ func baseStepFields(stepType, name, typelabel string, capabilities []string, spe
 // on the theory that a flat black-fill vector glyph has no grayscale
 // data to modulate against, but that reasoning was wrong for this
 // setup and the actual problem was an unrelated machine max-speed
-// setting.
+// setting. scan_mode is FULL_SWEEP rather than the class default
+// SEGMENTED ("moves between content regions" — for sparse per-letter
+// glyph ink, that's a lot of short start-stop jumps; "Full Sweep:
+// scans full width with laser toggling" per its own tooltip in
+// widgets/raster_page.py, simpler and more predictable motion for
+// small text like this).
 func engraveStepDict(name string, speedMmMin, powerPct float64, airAssist bool) map[string]any {
 	producer := map[string]any{
 		"type": "Rasterizer",
@@ -287,28 +307,26 @@ func engraveStepDict(name string, speedMmMin, powerPct float64, airAssist bool) 
 		},
 	}
 	flat := map[string]any{
-		"scan_angle":              0.0,
-		"depth_mode":              "POWER_MODULATION",
-		"invert":                  false,
-		"auto_levels":             true,
-		"black_point":             0,
-		"white_point":             255,
-		"threshold":               128,
-		"line_interval_mm":        nil,
-		"sample_interval_mm":      nil,
-		"dot_width_correction_mm": nil,
-		"min_power_level":         0.0,
-		"max_power_level":         1.0,
-		"num_power_levels":        25,
-		"offset_x_mm":             0.0,
-		"offset_y_mm":             0.0,
-		"scan_mode":               "SEGMENTED",
-		"cross_hatch":             false,
-		"num_depth_levels":        5,
-		"z_step_down":             0.0,
-		"angle_increment":         0.0,
-		"dither_algorithm":        nil,
-		"bidir_x_offset_mm":       0.0,
+		"scan_angle":         0.0,
+		"depth_mode":         "POWER_MODULATION",
+		"invert":             false,
+		"auto_levels":        true,
+		"black_point":        0,
+		"white_point":        255,
+		"threshold":          128,
+		"line_interval_mm":   nil,
+		"sample_interval_mm": nil,
+		"min_power":          0.0,
+		"num_power_levels":   25,
+		"offset_x_mm":        0.0,
+		"offset_y_mm":        0.0,
+		"scan_mode":          "FULL_SWEEP",
+		"cross_hatch":        false,
+		"num_depth_levels":   5,
+		"z_step_down":        0.0,
+		"angle_increment":    0.0,
+		"dither_algorithm":   nil,
+		"bidir_x_offset_mm":  0.0,
 	}
 	return baseStepFields("EngraveStep", name, "Engrave", []string{"ENGRAVE"}, speedMmMin, powerPct, airAssist, producer, flat)
 }
