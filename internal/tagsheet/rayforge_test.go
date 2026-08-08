@@ -34,6 +34,14 @@ type rypStepT struct {
 	SelectedLaserUID *string        `json:"selected_laser_uid"`
 	Capabilities     []string       `json:"capabilities"`
 	OpsproducerDict  map[string]any `json:"opsproducer_dict"`
+	// DepthMode/CutSide are read from these TOP-LEVEL keys by each step
+	// subclass's from_dict before it ever looks inside opsproducer_dict —
+	// verified by loading a generated file in the real app: an early
+	// version of this generator wrote depth_mode only inside
+	// opsproducer_dict.params and the app displayed "Variable" power
+	// instead of the requested "Constant".
+	DepthMode *string `json:"depth_mode"`
+	CutSide   *string `json:"cut_side"`
 }
 
 type rypWorkPieceT struct {
@@ -153,10 +161,12 @@ func TestRenderRayforge(t *testing.T) {
 		speed        float64
 		power        float64
 		air          bool
+		depthMode    string // "" if not applicable to this step type
+		cutSide      string // "" if not applicable to this step type
 	}{
-		{"Raster Text", "text-fill", "EngraveStep", "Rasterizer", DefaultCutSettings.RasterSpeedMmMin, DefaultCutSettings.RasterPowerPct / 100, DefaultCutSettings.RasterAirAssist},
-		{"Outline Text", "text-outline", "ContourStep", "ContourProducer", DefaultCutSettings.OutlineSpeedMmMin, DefaultCutSettings.OutlinePowerPct / 100, DefaultCutSettings.OutlineAirAssist},
-		{"Cut Tag", "cut", "ContourStep", "ContourProducer", DefaultCutSettings.CutSpeedMmMin, DefaultCutSettings.CutPowerPct / 100, DefaultCutSettings.CutAirAssist},
+		{"Raster Text", "text-fill", "EngraveStep", "Rasterizer", DefaultCutSettings.RasterSpeedMmMin, DefaultCutSettings.RasterPowerPct / 100, DefaultCutSettings.RasterAirAssist, "CONSTANT_POWER", ""},
+		{"Outline Text", "text-outline", "ContourStep", "ContourProducer", DefaultCutSettings.OutlineSpeedMmMin, DefaultCutSettings.OutlinePowerPct / 100, DefaultCutSettings.OutlineAirAssist, "", "CENTERLINE"},
+		{"Cut Tag", "cut", "ContourStep", "ContourProducer", DefaultCutSettings.CutSpeedMmMin, DefaultCutSettings.CutPowerPct / 100, DefaultCutSettings.CutAirAssist, "", "OUTSIDE"},
 	}
 
 	for i, layer := range doc.Children {
@@ -212,6 +222,20 @@ func TestRenderRayforge(t *testing.T) {
 		}
 		if _, ok := step.OpsproducerDict["params"].(map[string]any); !ok {
 			t.Errorf("layer[%d] step.opsproducer_dict.params is missing or not an object", i)
+		}
+		// depth_mode/cut_side must be set at the TOP level of the step dict,
+		// not only inside opsproducer_dict.params — each step subclass's
+		// from_dict reads the top-level key first and only falls back to
+		// the legacy opsproducer_dict payload if it's absent.
+		if want.depthMode != "" {
+			if step.DepthMode == nil || *step.DepthMode != want.depthMode {
+				t.Errorf("layer[%d] step.depth_mode (top-level) = %v, want %q", i, step.DepthMode, want.depthMode)
+			}
+		}
+		if want.cutSide != "" {
+			if step.CutSide == nil || *step.CutSide != want.cutSide {
+				t.Errorf("layer[%d] step.cut_side (top-level) = %v, want %q", i, step.CutSide, want.cutSide)
+			}
 		}
 		if len(step.Capabilities) == 0 {
 			t.Errorf("layer[%d] step.capabilities is empty", i)

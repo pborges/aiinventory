@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"maps"
 	"math"
 
 	"github.com/google/uuid"
@@ -200,8 +201,27 @@ func rayforgeLayer(sheet Sheet, name, svgLayerID string, paths []Path, assetUID 
 // speed/power/air-assist as flat fields, and an empty transformer-dict
 // pair (Step.from_dict merges these with the step class's own defaults,
 // so [] safely picks up whatever pipeline that step type normally runs).
-func baseStepFields(stepType, name, typelabel string, capabilities []string, speedMmMin, powerPct float64, airAssist bool, opsproducer map[string]any) map[string]any {
-	return map[string]any{
+//
+// extra holds the step-type-specific fields (e.g. depth_mode, cut_side)
+// at TWO levels at once: as flat top-level keys, matching exactly what
+// that step class's own to_dict() writes (EngraveStep/ContourStep.
+// to_dict() in laser_essentials/steps/{raster,contour}_step.py) — the
+// primary path each subclass's from_dict reads first — and nested
+// inside opsproducer_dict.params, the pre-refactor legacy path each
+// from_dict falls back to if a top-level key is missing. Only the
+// second was present in this generator's first attempt at this schema:
+// it fixed the "KeyError: 'opsproducer_dict'" crash (that key is a hard
+// requirement in the base Step.from_dict, independent of this
+// fallback), but the raster step then showed "Variable" power instead
+// of the requested "Constant" — evidence that whatever's actually
+// compiled into the installed app (confirmed elsewhere to disagree
+// with github.com/barebaric/rayforge "main" on other details too, e.g.
+// raster_step.py's from_dict sits at a different line number than the
+// crash traceback reported) prioritizes the top-level keys over the
+// legacy fallback, at least for some fields. Writing both removes the
+// ambiguity instead of betting on one path.
+func baseStepFields(stepType, name, typelabel string, capabilities []string, speedMmMin, powerPct float64, airAssist bool, opsproducer map[string]any, extra map[string]any) map[string]any {
+	d := map[string]any{
 		"uid":                     uuid.NewString(),
 		"type":                    "step",
 		"step_type":               stepType,
@@ -229,19 +249,19 @@ func baseStepFields(stepType, name, typelabel string, capabilities []string, spe
 		"tab_power":                        0.0,
 		"children":                         []any{},
 	}
+	maps.Copy(d, extra)
+	return d
 }
 
 // engraveStepDict builds an EngraveStep — the raster-fill operation —
-// backed by a Rasterizer opsproducer. Defaults beyond speed/power/
-// air-assist (dithering, scan mode, etc.) match Rayforge's own "New
-// Step" for an Engrave, per tests/assets/rotary.ryp, except depth_mode:
-// that fixture used POWER_MODULATION ("Variable Power" in the UI —
-// power varies with pixel darkness, for grayscale/photo engraving),
-// but our source is a flat black-fill vector glyph with no grayscale
-// data, so CONSTANT_POWER ("Constant Power" — binary mask, constant
-// power scan lines) is the mode that actually matches what's being
-// engraved (see DepthMode's docstring in
-// rayforge/pipeline/stage/assembler_helpers.py).
+// backed by a Rasterizer opsproducer, with fields matching
+// EngraveStep.__init__'s own defaults except depth_mode: those defaults
+// use POWER_MODULATION ("Variable Power" in the UI — power varies with
+// pixel darkness, for grayscale/photo engraving), but our source is a
+// flat black-fill vector glyph with no grayscale data, so CONSTANT_POWER
+// ("Constant Power" — binary mask, constant power scan lines) is the
+// mode that actually matches what's being engraved (see DepthMode's
+// docstring in rayforge/pipeline/stage/assembler_helpers.py).
 func engraveStepDict(name string, speedMmMin, powerPct float64, airAssist bool) map[string]any {
 	producer := map[string]any{
 		"type": "Rasterizer",
@@ -266,7 +286,31 @@ func engraveStepDict(name string, speedMmMin, powerPct float64, airAssist bool) 
 			"angle_increment":    0.0,
 		},
 	}
-	return baseStepFields("EngraveStep", name, "Engrave", []string{"ENGRAVE"}, speedMmMin, powerPct, airAssist, producer)
+	flat := map[string]any{
+		"scan_angle":              0.0,
+		"depth_mode":              "CONSTANT_POWER",
+		"invert":                  false,
+		"auto_levels":             true,
+		"black_point":             0,
+		"white_point":             255,
+		"threshold":               128,
+		"line_interval_mm":        nil,
+		"sample_interval_mm":      nil,
+		"dot_width_correction_mm": nil,
+		"min_power_level":         0.0,
+		"max_power_level":         1.0,
+		"num_power_levels":        25,
+		"offset_x_mm":             0.0,
+		"offset_y_mm":             0.0,
+		"scan_mode":               "SEGMENTED",
+		"cross_hatch":             false,
+		"num_depth_levels":        5,
+		"z_step_down":             0.0,
+		"angle_increment":         0.0,
+		"dither_algorithm":        nil,
+		"bidir_x_offset_mm":       0.0,
+	}
+	return baseStepFields("EngraveStep", name, "Engrave", []string{"ENGRAVE"}, speedMmMin, powerPct, airAssist, producer, flat)
 }
 
 // contourStepDict builds a ContourStep — a vector cut/trace operation —
@@ -285,7 +329,16 @@ func contourStepDict(name string, speedMmMin, powerPct float64, airAssist bool, 
 			"threshold":          0.5,
 		},
 	}
-	return baseStepFields("ContourStep", name, "Contour", []string{"CUT", "SCORE"}, speedMmMin, powerPct, airAssist, producer)
+	flat := map[string]any{
+		"cut_side":           cutSide,
+		"cut_order":          "INSIDE_OUTSIDE",
+		"remove_inner_paths": false,
+		"offset_mm":          0.0,
+		"overcut":            0.0,
+		"override_threshold": false,
+		"threshold":          0.5,
+	}
+	return baseStepFields("ContourStep", name, "Contour", []string{"CUT", "SCORE"}, speedMmMin, powerPct, airAssist, producer, flat)
 }
 
 // pathsToCommands flattens paths (already positioned in sheet-space mm,
