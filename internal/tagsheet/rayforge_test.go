@@ -164,7 +164,7 @@ func TestRenderRayforge(t *testing.T) {
 		depthMode    string // "" if not applicable to this step type
 		cutSide      string // "" if not applicable to this step type
 	}{
-		{"Raster Text", "text-fill", "EngraveStep", "Rasterizer", DefaultCutSettings.RasterSpeedMmMin, DefaultCutSettings.RasterPowerPct / 100, DefaultCutSettings.RasterAirAssist, "CONSTANT_POWER", ""},
+		{"Raster Text", "text-fill", "EngraveStep", "Rasterizer", DefaultCutSettings.RasterSpeedMmMin, DefaultCutSettings.RasterPowerPct / 100, DefaultCutSettings.RasterAirAssist, "POWER_MODULATION", ""},
 		{"Outline Text", "text-outline", "ContourStep", "ContourProducer", DefaultCutSettings.OutlineSpeedMmMin, DefaultCutSettings.OutlinePowerPct / 100, DefaultCutSettings.OutlineAirAssist, "", "CENTERLINE"},
 		{"Cut Tag", "cut", "ContourStep", "ContourProducer", DefaultCutSettings.CutSpeedMmMin, DefaultCutSettings.CutPowerPct / 100, DefaultCutSettings.CutAirAssist, "", "OUTSIDE"},
 	}

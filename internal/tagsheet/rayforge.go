@@ -255,19 +255,19 @@ func baseStepFields(stepType, name, typelabel string, capabilities []string, spe
 
 // engraveStepDict builds an EngraveStep — the raster-fill operation —
 // backed by a Rasterizer opsproducer, with fields matching
-// EngraveStep.__init__'s own defaults except depth_mode: those defaults
-// use POWER_MODULATION ("Variable Power" in the UI — power varies with
-// pixel darkness, for grayscale/photo engraving), but our source is a
-// flat black-fill vector glyph with no grayscale data, so CONSTANT_POWER
-// ("Constant Power" — binary mask, constant power scan lines) is the
-// mode that actually matches what's being engraved (see DepthMode's
-// docstring in rayforge/pipeline/stage/assembler_helpers.py).
+// EngraveStep.__init__'s own defaults, including depth_mode:
+// POWER_MODULATION ("Variable Power" in the UI) — confirmed correct by
+// the app's owner; an earlier attempt switched this to CONSTANT_POWER
+// on the theory that a flat black-fill vector glyph has no grayscale
+// data to modulate against, but that reasoning was wrong for this
+// setup and the actual problem was an unrelated machine max-speed
+// setting.
 func engraveStepDict(name string, speedMmMin, powerPct float64, airAssist bool) map[string]any {
 	producer := map[string]any{
 		"type": "Rasterizer",
 		"params": map[string]any{
 			"scan_angle":         0.0,
-			"depth_mode":         "CONSTANT_POWER",
+			"depth_mode":         "POWER_MODULATION",
 			"threshold":          128,
 			"dither_algorithm":   "floyd_steinberg",
 			"cross_hatch":        false,
@@ -288,7 +288,7 @@ func engraveStepDict(name string, speedMmMin, powerPct float64, airAssist bool) 
 	}
 	flat := map[string]any{
 		"scan_angle":              0.0,
-		"depth_mode":              "CONSTANT_POWER",
+		"depth_mode":              "POWER_MODULATION",
 		"invert":                  false,
 		"auto_levels":             true,
 		"black_point":             0,
