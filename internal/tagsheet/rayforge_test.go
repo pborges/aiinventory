@@ -26,11 +26,14 @@ type rypWorkflowT struct {
 }
 
 type rypStepT struct {
-	Type      string  `json:"type"`
-	StepType  string  `json:"step_type"`
-	CutSpeed  float64 `json:"cut_speed"`
-	Power     float64 `json:"power"`
-	AirAssist bool    `json:"air_assist"`
+	Type             string         `json:"type"`
+	StepType         string         `json:"step_type"`
+	CutSpeed         float64        `json:"cut_speed"`
+	Power            float64        `json:"power"`
+	AirAssist        bool           `json:"air_assist"`
+	SelectedLaserUID *string        `json:"selected_laser_uid"`
+	Capabilities     []string       `json:"capabilities"`
+	OpsproducerDict  map[string]any `json:"opsproducer_dict"`
 }
 
 type rypWorkPieceT struct {
@@ -39,9 +42,11 @@ type rypWorkPieceT struct {
 	WidthMm       float64       `json:"width_mm"`
 	HeightMm      float64       `json:"height_mm"`
 	SourceSegment struct {
-		SourceAssetUID   string     `json:"source_asset_uid"`
-		LayerID          string     `json:"layer_id"`
-		CropWindowPx     [4]float64 `json:"crop_window_px"`
+		SourceAssetUID    string     `json:"source_asset_uid"`
+		CropWindowPx      [4]float64 `json:"crop_window_px"`
+		VectorizationSpec struct {
+			ActiveLayerIDs []string `json:"active_layer_ids"`
+		} `json:"vectorization_spec"`
 		PristineGeometry struct {
 			Commands [][]any `json:"commands"`
 		} `json:"pristine_geometry"`
@@ -141,16 +146,17 @@ func TestRenderRayforge(t *testing.T) {
 	}
 
 	wantLayers := []struct {
-		name     string
-		layerID  string
-		stepType string
-		speed    float64
-		power    float64
-		air      bool
+		name         string
+		layerID      string
+		stepType     string
+		producerType string
+		speed        float64
+		power        float64
+		air          bool
 	}{
-		{"Raster Text", "text-fill", "EngraveStep", DefaultCutSettings.RasterSpeedMmMin, DefaultCutSettings.RasterPowerPct / 100, DefaultCutSettings.RasterAirAssist},
-		{"Outline Text", "text-outline", "ContourStep", DefaultCutSettings.OutlineSpeedMmMin, DefaultCutSettings.OutlinePowerPct / 100, DefaultCutSettings.OutlineAirAssist},
-		{"Cut Tag", "cut", "ContourStep", DefaultCutSettings.CutSpeedMmMin, DefaultCutSettings.CutPowerPct / 100, DefaultCutSettings.CutAirAssist},
+		{"Raster Text", "text-fill", "EngraveStep", "Rasterizer", DefaultCutSettings.RasterSpeedMmMin, DefaultCutSettings.RasterPowerPct / 100, DefaultCutSettings.RasterAirAssist},
+		{"Outline Text", "text-outline", "ContourStep", "ContourProducer", DefaultCutSettings.OutlineSpeedMmMin, DefaultCutSettings.OutlinePowerPct / 100, DefaultCutSettings.OutlineAirAssist},
+		{"Cut Tag", "cut", "ContourStep", "ContourProducer", DefaultCutSettings.CutSpeedMmMin, DefaultCutSettings.CutPowerPct / 100, DefaultCutSettings.CutAirAssist},
 	}
 
 	for i, layer := range doc.Children {
@@ -191,13 +197,32 @@ func TestRenderRayforge(t *testing.T) {
 		if step.AirAssist != want.air {
 			t.Errorf("layer[%d] step.air_assist = %v, want %v", i, step.AirAssist, want.air)
 		}
+		if step.SelectedLaserUID != nil {
+			t.Errorf("layer[%d] step.selected_laser_uid = %v, want null (no machine-specific laser bound)", i, *step.SelectedLaserUID)
+		}
+		// opsproducer_dict is the field that broke the very first version of
+		// this generator: Rayforge's installed-app schema requires it
+		// (unconditional dict access in Step.from_dict), unlike the flat
+		// fields its still-unreleased "main" branch schema uses instead.
+		if step.OpsproducerDict == nil {
+			t.Fatalf("layer[%d] step has no opsproducer_dict — this is REQUIRED by the installed app, its absence is exactly what produced \"KeyError: 'opsproducer_dict'\" the first time", i)
+		}
+		if got, _ := step.OpsproducerDict["type"].(string); got != want.producerType {
+			t.Errorf("layer[%d] step.opsproducer_dict.type = %q, want %q", i, got, want.producerType)
+		}
+		if _, ok := step.OpsproducerDict["params"].(map[string]any); !ok {
+			t.Errorf("layer[%d] step.opsproducer_dict.params is missing or not an object", i)
+		}
+		if len(step.Capabilities) == 0 {
+			t.Errorf("layer[%d] step.capabilities is empty", i)
+		}
 
 		seg := workpiece.SourceSegment
 		if seg.SourceAssetUID != asset.UID {
 			t.Errorf("layer[%d] workpiece.source_segment.source_asset_uid = %q, want %q", i, seg.SourceAssetUID, asset.UID)
 		}
-		if seg.LayerID != want.layerID {
-			t.Errorf("layer[%d] workpiece.source_segment.layer_id = %q, want %q", i, seg.LayerID, want.layerID)
+		if activeIDs := seg.VectorizationSpec.ActiveLayerIDs; len(activeIDs) != 1 || activeIDs[0] != want.layerID {
+			t.Errorf("layer[%d] workpiece.source_segment.vectorization_spec.active_layer_ids = %v, want [%q]", i, activeIDs, want.layerID)
 		}
 		if len(seg.PristineGeometry.Commands) == 0 {
 			t.Errorf("layer[%d] workpiece has no geometry commands", i)
