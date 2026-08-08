@@ -52,13 +52,13 @@ type DownloadFormat = 'svg' | 'lbrn2' | 'rayforge'
  * intended flow is download, cut, uncheck any that failed, then register.
  * Settings uses this for both the asset-tag and location-tag panes, which
  * differ only in which api.* methods and geometry get passed in. */
-// DEFAULT_ROWS/COLS/PADDING_MM: a 60x26mm grid (at a laser-safe ~4mm
+// DEFAULT_ROWS/COLS/PADDING_MM: a 60x26mm grid (at a laser-safe ~2mm
 // kerf gap) that fits an 8.5x11in sheet in landscape — 4 cols x 60mm +
-// 3 gaps = 252mm of 279.4mm (11in), 6 rows x 26mm + 5 gaps = 176mm of
+// 3 gaps = 246mm of 279.4mm (11in), 6 rows x 26mm + 5 gaps = 166mm of
 // 215.9mm (8.5in).
 const DEFAULT_COLS = 4
 const DEFAULT_ROWS = 6
-const DEFAULT_PADDING_MM = 4
+const DEFAULT_PADDING_MM = 2
 
 export function GenerateTagsSection({ title, generate, register, fileBaseName, onRegistered }: Props) {
   const [rows, setRows] = useState(DEFAULT_ROWS)
@@ -77,7 +77,7 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
 
   const [sheet, setSheet] = useState<TagSheetResponse | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>('lbrn2')
+  const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>('rayforge')
   const [checkedCodes, setCheckedCodes] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
