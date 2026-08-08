@@ -1,6 +1,9 @@
 package api
 
 import (
+	"archive/zip"
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -55,6 +58,16 @@ func TestGenerateAssetTagSheet(t *testing.T) {
 	}
 	if !strings.Contains(resp.LBRN2, `<runBlower Value="1"/>`) {
 		t.Error("LBRN2 should reflect the requested air assist (on for the cut layer)")
+	}
+
+	rayforgeZip, err := base64.StdEncoding.DecodeString(resp.Rayforge)
+	if err != nil {
+		t.Fatalf("Rayforge response did not decode as base64: %v", err)
+	}
+	if zr, err := zip.NewReader(bytes.NewReader(rayforgeZip), int64(len(rayforgeZip))); err != nil {
+		t.Errorf("Rayforge response did not decode as a zip: %v", err)
+	} else if len(zr.File) != 1 || zr.File[0].Name != "project.json" {
+		t.Errorf("Rayforge zip = %v, want exactly one project.json member", zr.File)
 	}
 
 	// nothing should be persisted by a preview alone

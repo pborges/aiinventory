@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"log"
 	"net/http"
 	"regexp"
@@ -70,6 +71,10 @@ type tagSheetResponse struct {
 	Codes []string `json:"codes"`
 	SVG   string   `json:"svg"`
 	LBRN2 string   `json:"lbrn2"`
+	// Rayforge is a base64-encoded .ryp project file (a zip archive) —
+	// unlike SVG/LBRN2 this isn't text, so it can't go straight into a
+	// JSON string field.
+	Rayforge string `json:"rayforge"`
 }
 
 type tagSheetRegisterRequest struct {
@@ -185,10 +190,18 @@ func (s *Server) generateTagSheet(w http.ResponseWriter, r *http.Request, kind t
 		return
 	}
 
+	rayforgeZip, err := tagsheet.RenderRayforge(sheet, req.CutSettings.toTagsheet())
+	if err != nil {
+		log.Printf("tag sheet: render rayforge: %v", err)
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, tagSheetResponse{
-		Codes: codes,
-		SVG:   tagsheet.RenderSVG(sheet),
-		LBRN2: tagsheet.RenderLBRN2(sheet, req.CutSettings.toTagsheet()),
+		Codes:    codes,
+		SVG:      tagsheet.RenderSVG(sheet),
+		LBRN2:    tagsheet.RenderLBRN2(sheet, req.CutSettings.toTagsheet()),
+		Rayforge: base64.StdEncoding.EncodeToString(rayforgeZip),
 	})
 }
 

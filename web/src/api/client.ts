@@ -244,11 +244,14 @@ export interface UploadRegisteredTagsResponse {
 // TagSheetResponse is a freshly generated, not-yet-registered sheet of
 // tags — the Settings "Generate Asset/Location Tags" preview. Nothing is
 // persisted until the codes are actually registered (see
-// registerAssetTagSheet/registerLocationTagSheet).
+// registerAssetTagSheet/registerLocationTagSheet). rayforge is a base64-
+// encoded .ryp project file (a zip archive), unlike svg/lbrn2 which are
+// plain text.
 export interface TagSheetResponse {
   codes: string[]
   svg: string
   lbrn2: string
+  rayforge: string
 }
 
 // TagSheetCutSettings is the LightBurn speed/power/air-assist for each of

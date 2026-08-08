@@ -22,13 +22,33 @@ function downloadText(filename: string, content: string, mime: string) {
   URL.revokeObjectURL(url)
 }
 
+// downloadBase64 decodes a base64-encoded binary payload (the .ryp project
+// file is a zip archive, not text) into a Blob and downloads it the same
+// way downloadText does for the SVG/LBRN2 formats.
+function downloadBase64(filename: string, base64: string, mime: string) {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  const url = URL.createObjectURL(new Blob([bytes], { type: mime }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+type DownloadFormat = 'svg' | 'lbrn2' | 'rayforge'
+
 /** Generates a laser-cuttable sheet of pre-registered tags: a live preview
  * (debounced as the grid/padding change), per-operation LightBurn speed/
  * power/air-assist fields (defaulted for a 20W diode laser on 3mm
  * basswood, re-rendered into the same previewed codes when tweaked), a
  * per-code checkbox grid (pre-checked) so codes that didn't cut well can
- * be excluded, a Download button for the SVG/LBRN2 export checkboxes, and
- * a separate Register button that commits only the checked codes — the
+ * be excluded, a Download button gated by an SVG/LBRN2/Rayforge format
+ * radio group, and a separate Register button that commits only the
+ * checked codes — the
  * intended flow is download, cut, uncheck any that failed, then register.
  * Settings uses this for both the asset-tag and location-tag panes, which
  * differ only in which api.* methods and geometry get passed in. */
@@ -57,8 +77,7 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
 
   const [sheet, setSheet] = useState<TagSheetResponse | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [downloadSvg, setDownloadSvg] = useState(false)
-  const [downloadLbrn2, setDownloadLbrn2] = useState(true)
+  const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>('lbrn2')
   const [checkedCodes, setCheckedCodes] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -145,16 +164,20 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
     setStatus(null)
     try {
       const dateStamp = new Date().toISOString().slice(0, 10)
-      const downloaded: string[] = []
-      if (downloadSvg) {
-        downloadText(`${fileBaseName}-${dateStamp}.svg`, sheet.svg, 'image/svg+xml')
-        downloaded.push('SVG')
+      switch (downloadFormat) {
+        case 'svg':
+          downloadText(`${fileBaseName}-${dateStamp}.svg`, sheet.svg, 'image/svg+xml')
+          setStatus('Downloaded SVG.')
+          break
+        case 'lbrn2':
+          downloadText(`${fileBaseName}-${dateStamp}.lbrn2`, sheet.lbrn2, 'application/xml')
+          setStatus('Downloaded LBRN2.')
+          break
+        case 'rayforge':
+          downloadBase64(`${fileBaseName}-${dateStamp}.ryp`, sheet.rayforge, 'application/zip')
+          setStatus('Downloaded Rayforge project.')
+          break
       }
-      if (downloadLbrn2) {
-        downloadText(`${fileBaseName}-${dateStamp}.lbrn2`, sheet.lbrn2, 'application/xml')
-        downloaded.push('LBRN2')
-      }
-      if (downloaded.length) setStatus(`Downloaded ${downloaded.join(' + ')}.`)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to download')
     } finally {
@@ -351,18 +374,33 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
 
       <div class="generate-tags-actions">
         <label class="generate-tags-checkbox">
-          <input type="checkbox" checked={downloadSvg} onChange={(e) => setDownloadSvg((e.target as HTMLInputElement).checked)} />
+          <input
+            type="radio"
+            name={`${fileBaseName}-download-format`}
+            checked={downloadFormat === 'svg'}
+            onChange={() => setDownloadFormat('svg')}
+          />
           SVG
         </label>
         <label class="generate-tags-checkbox">
           <input
-            type="checkbox"
-            checked={downloadLbrn2}
-            onChange={(e) => setDownloadLbrn2((e.target as HTMLInputElement).checked)}
+            type="radio"
+            name={`${fileBaseName}-download-format`}
+            checked={downloadFormat === 'lbrn2'}
+            onChange={() => setDownloadFormat('lbrn2')}
           />
           LBRN2
         </label>
-        <button type="button" class="btn-primary" onClick={onDownload} disabled={busy || !sheet || (!downloadSvg && !downloadLbrn2)}>
+        <label class="generate-tags-checkbox">
+          <input
+            type="radio"
+            name={`${fileBaseName}-download-format`}
+            checked={downloadFormat === 'rayforge'}
+            onChange={() => setDownloadFormat('rayforge')}
+          />
+          Rayforge
+        </label>
+        <button type="button" class="btn-primary" onClick={onDownload} disabled={busy || !sheet}>
           Download
         </button>
         <button type="button" class="btn-primary" onClick={onRegister} disabled={busy || !sheet || checkedCodes.size === 0}>
@@ -370,9 +408,9 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
         </button>
       </div>
       <p class="settings-status">
-        Speeds/powers default for a 20W diode laser on 3mm basswood — tune per material/machine in LightBurn. Download,
-        cut the sheet, uncheck any codes that didn't cut well, then Register to commit the rest to the registry above.
-        Downloading both file formats may trigger Chrome's one-time multiple-downloads prompt.
+        Speeds/powers default for a 20W diode laser on 3mm basswood — tune per material/machine in LightBurn or
+        Rayforge. Download, cut the sheet, uncheck any codes that didn't cut well, then Register to commit the rest
+        to the registry above.
       </p>
       {status && <p class="settings-status">{status}</p>}
       {error && <p class="settings-status settings-status-error">{error}</p>}
