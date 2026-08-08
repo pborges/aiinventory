@@ -32,13 +32,12 @@ function downloadText(filename: string, content: string, mime: string) {
  * intended flow is download, cut, uncheck any that failed, then register.
  * Settings uses this for both the asset-tag and location-tag panes, which
  * differ only in which api.* methods and geometry get passed in. */
-// DEFAULT_ROWS/COLS/PADDING_MM: the largest 60x26mm grid (at a
-// laser-safe ~4mm kerf gap) that fits an 8.5x11in sheet in landscape —
-// 4 cols x 60mm + 3 gaps = 252mm of 279.4mm (11in), 7 rows x 26mm + 6 gaps
-// = 206mm of 215.9mm (8.5in). 8 rows would overflow the 8.5in dimension
-// (236mm > 215.9mm) at this padding.
+// DEFAULT_ROWS/COLS/PADDING_MM: a 60x26mm grid (at a laser-safe ~4mm
+// kerf gap) that fits an 8.5x11in sheet in landscape — 4 cols x 60mm +
+// 3 gaps = 252mm of 279.4mm (11in), 6 rows x 26mm + 5 gaps = 176mm of
+// 215.9mm (8.5in).
 const DEFAULT_COLS = 4
-const DEFAULT_ROWS = 7
+const DEFAULT_ROWS = 6
 const DEFAULT_PADDING_MM = 4
 
 export function GenerateTagsSection({ title, generate, register, fileBaseName, onRegistered }: Props) {
@@ -46,13 +45,13 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
   const [cols, setCols] = useState(DEFAULT_COLS)
   const [padding, setPadding] = useState(DEFAULT_PADDING_MM)
 
-  const [rasterSpeed, setRasterSpeed] = useState(3000)
-  const [rasterPower, setRasterPower] = useState(40)
+  const [rasterSpeed, setRasterSpeed] = useState(3500)
+  const [rasterPower, setRasterPower] = useState(17.5)
   const [rasterAirAssist, setRasterAirAssist] = useState(false)
   const [outlineSpeed, setOutlineSpeed] = useState(1500)
-  const [outlinePower, setOutlinePower] = useState(25)
+  const [outlinePower, setOutlinePower] = useState(5)
   const [outlineAirAssist, setOutlineAirAssist] = useState(false)
-  const [cutSpeed, setCutSpeed] = useState(200)
+  const [cutSpeed, setCutSpeed] = useState(600)
   const [cutPower, setCutPower] = useState(100)
   const [cutAirAssist, setCutAirAssist] = useState(true)
 
