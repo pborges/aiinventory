@@ -234,13 +234,20 @@ func baseStepFields(stepType, name, typelabel string, capabilities []string, spe
 // engraveStepDict builds an EngraveStep — the raster-fill operation —
 // backed by a Rasterizer opsproducer. Defaults beyond speed/power/
 // air-assist (dithering, scan mode, etc.) match Rayforge's own "New
-// Step" for an Engrave, per tests/assets/rotary.ryp.
+// Step" for an Engrave, per tests/assets/rotary.ryp, except depth_mode:
+// that fixture used POWER_MODULATION ("Variable Power" in the UI —
+// power varies with pixel darkness, for grayscale/photo engraving),
+// but our source is a flat black-fill vector glyph with no grayscale
+// data, so CONSTANT_POWER ("Constant Power" — binary mask, constant
+// power scan lines) is the mode that actually matches what's being
+// engraved (see DepthMode's docstring in
+// rayforge/pipeline/stage/assembler_helpers.py).
 func engraveStepDict(name string, speedMmMin, powerPct float64, airAssist bool) map[string]any {
 	producer := map[string]any{
 		"type": "Rasterizer",
 		"params": map[string]any{
 			"scan_angle":         0.0,
-			"depth_mode":         "POWER_MODULATION",
+			"depth_mode":         "CONSTANT_POWER",
 			"threshold":          128,
 			"dither_algorithm":   "floyd_steinberg",
 			"cross_hatch":        false,
