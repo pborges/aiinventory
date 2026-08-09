@@ -204,11 +204,11 @@ func TestToRayforgePath(t *testing.T) {
 		{Op: OpCube, Pts: [3]Point{{X: 9, Y: 10}, {X: 11, Y: 12}, {X: 13, Y: 14}}},
 	}
 	got := toRayforgePath(src)
-	want := rayforge.Path{
-		rayforge.Move(rayforge.Point{X: 1, Y: 2}),
-		rayforge.Line(rayforge.Point{X: 3, Y: 4}),
-		rayforge.Quad(rayforge.Point{X: 5, Y: 6}, rayforge.Point{X: 7, Y: 8}),
-		rayforge.Cubic(rayforge.Point{X: 9, Y: 10}, rayforge.Point{X: 11, Y: 12}, rayforge.Point{X: 13, Y: 14}),
+	want := rayforged.Path{
+		rayforged.Move(rayforged.Point{X: 1, Y: 2}),
+		rayforged.Line(rayforged.Point{X: 3, Y: 4}),
+		rayforged.Quad(rayforged.Point{X: 5, Y: 6}, rayforged.Point{X: 7, Y: 8}),
+		rayforged.Cubic(rayforged.Point{X: 9, Y: 10}, rayforged.Point{X: 11, Y: 12}, rayforged.Point{X: 13, Y: 14}),
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d segments, want %d", len(got), len(want))
