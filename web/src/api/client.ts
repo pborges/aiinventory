@@ -269,6 +269,17 @@ export interface TagSheetCutSettings {
   cut_air_assist: boolean
 }
 
+// TagSheetSettings is a user's persisted rows/cols/padding/cut-settings for
+// a tag-sheet generator (asset or location, saved under separate keys) —
+// GenerateTagsSection loads this on mount instead of hardcoding defaults,
+// autosaves it as fields change, and can restore the server's defaults.
+export interface TagSheetSettings {
+  rows: number
+  cols: number
+  padding_mm: number
+  cut_settings: TagSheetCutSettings
+}
+
 export const api = {
   version: () => request<{ version: string }>('GET', '/api/version'),
   bootstrapStatus: () => request<{ needed: boolean }>('GET', '/api/auth/bootstrap'),
@@ -387,8 +398,14 @@ export const api = {
     request<TagSheetResponse>('POST', '/api/tags/sheet', { rows, cols, padding_mm: paddingMm, cut_settings: cutSettings, codes }),
   registerAssetTagSheet: (codes: string[]) =>
     request<UploadRegisteredTagsResponse>('POST', '/api/tags/sheet/register', { codes }),
+  getAssetTagSheetSettings: () => request<TagSheetSettings>('GET', '/api/tags/sheet/settings'),
+  saveAssetTagSheetSettings: (settings: TagSheetSettings) => request<TagSheetSettings>('PUT', '/api/tags/sheet/settings', settings),
+  resetAssetTagSheetSettings: () => request<TagSheetSettings>('DELETE', '/api/tags/sheet/settings'),
   generateLocationTagSheet: (rows: number, cols: number, paddingMm: number, cutSettings: TagSheetCutSettings, codes?: string[]) =>
     request<TagSheetResponse>('POST', '/api/location-tags/sheet', { rows, cols, padding_mm: paddingMm, cut_settings: cutSettings, codes }),
   registerLocationTagSheet: (codes: string[]) =>
     request<UploadRegisteredTagsResponse>('POST', '/api/location-tags/sheet/register', { codes }),
+  getLocationTagSheetSettings: () => request<TagSheetSettings>('GET', '/api/location-tags/sheet/settings'),
+  saveLocationTagSheetSettings: (settings: TagSheetSettings) => request<TagSheetSettings>('PUT', '/api/location-tags/sheet/settings', settings),
+  resetLocationTagSheetSettings: () => request<TagSheetSettings>('DELETE', '/api/location-tags/sheet/settings'),
 }

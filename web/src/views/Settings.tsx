@@ -338,6 +338,9 @@ export function Settings(_props: RouteProps) {
                   title="Generate Asset Tags"
                   generate={api.generateAssetTagSheet}
                   register={api.registerAssetTagSheet}
+                  getSettings={api.getAssetTagSheetSettings}
+                  saveSettings={api.saveAssetTagSheetSettings}
+                  resetSettings={api.resetAssetTagSheetSettings}
                   fileBaseName="asset-tags"
                   onRegistered={() => setAssetTagsRefreshKey((k) => k + 1)}
                 />
@@ -371,6 +374,9 @@ export function Settings(_props: RouteProps) {
                   title="Generate Location Tags"
                   generate={api.generateLocationTagSheet}
                   register={api.registerLocationTagSheet}
+                  getSettings={api.getLocationTagSheetSettings}
+                  saveSettings={api.saveLocationTagSheetSettings}
+                  resetSettings={api.resetLocationTagSheetSettings}
                   fileBaseName="location-tags"
                   onRegistered={() => setLocationTagsRefreshKey((k) => k + 1)}
                 />

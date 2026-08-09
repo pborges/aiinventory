@@ -102,6 +102,9 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStor
 	mux.Handle("POST /api/tags/upload", srv.requireAuth(srv.handleUploadRegisteredAssetTags))
 	mux.Handle("POST /api/tags/sheet", srv.requireAuth(srv.handleGenerateAssetTagSheet))
 	mux.Handle("POST /api/tags/sheet/register", srv.requireAuth(srv.handleRegisterAssetTagSheet))
+	mux.Handle("GET /api/tags/sheet/settings", srv.requireAuth(srv.handleGetAssetTagSheetSettings))
+	mux.Handle("PUT /api/tags/sheet/settings", srv.requireAuth(srv.handleSaveAssetTagSheetSettings))
+	mux.Handle("DELETE /api/tags/sheet/settings", srv.requireAuth(srv.handleResetAssetTagSheetSettings))
 
 	mux.Handle("GET /api/location-tags", srv.requireAuth(srv.handleListRegisteredLocationTags))
 	mux.Handle("POST /api/location-tags", srv.requireAuth(srv.handleCreateRegisteredLocationTag))
@@ -109,6 +112,9 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStor
 	mux.Handle("POST /api/location-tags/upload", srv.requireAuth(srv.handleUploadRegisteredLocationTags))
 	mux.Handle("POST /api/location-tags/sheet", srv.requireAuth(srv.handleGenerateLocationTagSheet))
 	mux.Handle("POST /api/location-tags/sheet/register", srv.requireAuth(srv.handleRegisterLocationTagSheet))
+	mux.Handle("GET /api/location-tags/sheet/settings", srv.requireAuth(srv.handleGetLocationTagSheetSettings))
+	mux.Handle("PUT /api/location-tags/sheet/settings", srv.requireAuth(srv.handleSaveLocationTagSheetSettings))
+	mux.Handle("DELETE /api/location-tags/sheet/settings", srv.requireAuth(srv.handleResetLocationTagSheetSettings))
 
 	mux.Handle("/", web.Handler())
 

@@ -1,10 +1,19 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { ApiError, type TagSheetCutSettings, type TagSheetResponse, type UploadRegisteredTagsResponse } from '../api/client'
+import {
+  ApiError,
+  type TagSheetCutSettings,
+  type TagSheetResponse,
+  type TagSheetSettings,
+  type UploadRegisteredTagsResponse,
+} from '../api/client'
 
 interface Props {
   title: string
   generate: (rows: number, cols: number, paddingMm: number, cutSettings: TagSheetCutSettings, codes?: string[]) => Promise<TagSheetResponse>
   register: (codes: string[]) => Promise<UploadRegisteredTagsResponse>
+  getSettings: () => Promise<TagSheetSettings>
+  saveSettings: (settings: TagSheetSettings) => Promise<TagSheetSettings>
+  resetSettings: () => Promise<TagSheetSettings>
   fileBaseName: string
   onRegistered: () => void
 }
@@ -54,7 +63,13 @@ type DownloadFormat = 'svg' | 'lbrn2' | 'rayforge'
  * commits only the checked codes — the
  * intended flow is download, cut, uncheck any that failed, then register.
  * Settings uses this for both the asset-tag and location-tag panes, which
- * differ only in which api.* methods and geometry get passed in. */
+ * differ only in which api.* methods and geometry get passed in. Rows/
+ * cols/padding/cut-settings are per-user persisted server-side (getSettings/
+ * saveSettings/resetSettings): loaded on mount in place of the hardcoded
+ * literals below, autosaved (same debounce as the preview) whenever they
+ * change, and reset via the "Restore Defaults" button — which restores
+ * exactly those hardcoded literals, since that's the server's own
+ * fallback for a user with no saved override. */
 // DEFAULT_ROWS/COLS/PADDING_MM: a 60x26mm grid (at a laser-safe ~2mm
 // kerf gap) that fits an 8.5x11in sheet in landscape — 4 cols x 60mm +
 // 3 gaps = 246mm of 279.4mm (11in), 6 rows x 26mm + 5 gaps = 166mm of
@@ -63,7 +78,7 @@ const DEFAULT_COLS = 4
 const DEFAULT_ROWS = 6
 const DEFAULT_PADDING_MM = 2
 
-export function GenerateTagsSection({ title, generate, register, fileBaseName, onRegistered }: Props) {
+export function GenerateTagsSection({ title, generate, register, getSettings, saveSettings, resetSettings, fileBaseName, onRegistered }: Props) {
   const [rows, setRows] = useState(DEFAULT_ROWS)
   const [cols, setCols] = useState(DEFAULT_COLS)
   const [padding, setPadding] = useState(DEFAULT_PADDING_MM)
@@ -86,6 +101,81 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+
+  // Tracks whether the persisted settings fetch (below) has resolved, so
+  // the rows/cols/padding/cut-settings effects don't autosave the
+  // hardcoded placeholder state back to the server before the user's real
+  // saved values (or the server's defaults) have even loaded.
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+  // The last settings payload known to match what's persisted (just loaded,
+  // or just saved) — lets the autosave effects skip a redundant PUT when
+  // the values that changed are the ones settings-loading itself just set.
+  const lastPersistedRef = useRef<string | null>(null)
+
+  function settingsPayload(): TagSheetSettings {
+    return { rows, cols, padding_mm: padding, cut_settings: cutSettingsPayload() }
+  }
+
+  function applySettings(s: TagSheetSettings) {
+    setRows(s.rows)
+    setCols(s.cols)
+    setPadding(s.padding_mm)
+    setRasterSpeed(s.cut_settings.raster_speed_mm_min)
+    setRasterPower(s.cut_settings.raster_power_pct)
+    setRasterAirAssist(s.cut_settings.raster_air_assist)
+    setOutlineSpeed(s.cut_settings.outline_speed_mm_min)
+    setOutlinePower(s.cut_settings.outline_power_pct)
+    setOutlineAirAssist(s.cut_settings.outline_air_assist)
+    setCutSpeed(s.cut_settings.cut_speed_mm_min)
+    setCutPower(s.cut_settings.cut_power_pct)
+    setCutAirAssist(s.cut_settings.cut_air_assist)
+  }
+
+  function persistSettingsIfChanged() {
+    if (!settingsLoaded) return
+    const serialized = JSON.stringify(settingsPayload())
+    if (serialized === lastPersistedRef.current) return
+    lastPersistedRef.current = serialized
+    saveSettings(JSON.parse(serialized)).catch((err) => {
+      setError(err instanceof ApiError ? err.message : 'Failed to save settings')
+    })
+  }
+
+  // Loads this user's saved rows/cols/padding/cut-settings once on mount,
+  // replacing the hardcoded placeholder state above — falls back to
+  // whatever's already there (the same hardcoded defaults the server would
+  // return anyway for a user with no override) if the fetch fails.
+  useEffect(() => {
+    let cancelled = false
+    getSettings()
+      .then((s) => {
+        if (cancelled) return
+        applySettings(s)
+        lastPersistedRef.current = JSON.stringify(s)
+        setSettingsLoaded(true)
+      })
+      .catch(() => setSettingsLoaded(true))
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function onRestoreDefaults() {
+    setBusy(true)
+    setError(null)
+    setStatus(null)
+    try {
+      const defaults = await resetSettings()
+      applySettings(defaults)
+      lastPersistedRef.current = JSON.stringify(defaults)
+      setStatus('Restored default settings.')
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to restore defaults')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   function toggleCode(code: string, checked: boolean) {
     setCheckedCodes((prev) => {
@@ -126,7 +216,10 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
   }
 
   useEffect(() => {
-    const timer = setTimeout(() => regenerate(), DEBOUNCE_MS)
+    const timer = setTimeout(() => {
+      regenerate()
+      persistSettingsIfChanged()
+    }, DEBOUNCE_MS)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, cols, padding])
@@ -140,7 +233,10 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
       skippedInitialCutSettingsRender.current = true
       return
     }
-    const timer = setTimeout(() => regenerate({ reuseCodes: true }), DEBOUNCE_MS)
+    const timer = setTimeout(() => {
+      regenerate({ reuseCodes: true })
+      persistSettingsIfChanged()
+    }, DEBOUNCE_MS)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rasterSpeed, rasterPower, rasterAirAssist, outlineSpeed, outlinePower, outlineAirAssist, cutSpeed, cutPower, cutAirAssist])
@@ -258,6 +354,9 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
         </label>
         <button type="button" onClick={() => regenerate()} disabled={busy}>
           New Codes
+        </button>
+        <button type="button" onClick={onRestoreDefaults} disabled={busy}>
+          Restore Defaults
         </button>
       </div>
 
