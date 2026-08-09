@@ -254,16 +254,14 @@ export interface TagSheetResponse {
   rayforge: string
 }
 
-// TagSheetCutSettings is the LightBurn speed/power/air-assist for each of
-// a sheet's three cut operations — baked into the downloaded .lbrn2's
+// TagSheetCutSettings is the LightBurn/Rayforge speed/power/air-assist for
+// each of a sheet's two operations — baked into the downloaded .lbrn2's
 // CutSetting blocks, purely cosmetic to the SVG preview.
 export interface TagSheetCutSettings {
   raster_speed_mm_min: number
   raster_power_pct: number
   raster_air_assist: boolean
-  outline_speed_mm_min: number
-  outline_power_pct: number
-  outline_air_assist: boolean
+  raster_line_interval_mm: number
   cut_speed_mm_min: number
   cut_power_pct: number
   cut_air_assist: boolean
@@ -272,7 +270,7 @@ export interface TagSheetCutSettings {
 // TagSheetSettings is a user's persisted rows/cols/padding/cut-settings for
 // a tag-sheet generator (asset or location, saved under separate keys) —
 // GenerateTagsSection loads this on mount instead of hardcoding defaults,
-// autosaves it as fields change, and can restore the server's defaults.
+// saved on an explicit Save click, and can restore the server's defaults.
 export interface TagSheetSettings {
   rows: number
   cols: number

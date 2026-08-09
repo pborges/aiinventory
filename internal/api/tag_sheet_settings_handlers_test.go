@@ -38,8 +38,7 @@ func TestTagSheetSettingsSaveRoundTrips(t *testing.T) {
 	custom := tagSheetSettingsRequest{
 		Rows: 8, Cols: 5, PaddingMm: 3,
 		CutSettings: tagSheetCutSettingsRequest{
-			RasterSpeedMmMin: 4000, RasterPowerPct: 20, RasterAirAssist: true,
-			OutlineSpeedMmMin: 2000, OutlinePowerPct: 10, OutlineAirAssist: true,
+			RasterSpeedMmMin: 4000, RasterPowerPct: 20, RasterAirAssist: true, RasterLineIntervalMm: 0.08,
 			CutSpeedMmMin: 500, CutPowerPct: 90, CutAirAssist: false,
 		},
 	}

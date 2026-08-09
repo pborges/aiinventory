@@ -41,16 +41,13 @@ func (r tagSheetSettingsRequest) valid() bool {
 }
 
 // defaultTagSheetSettings is the fallback for any user with no saved
-// override — unchanged from what the webui hardcoded before this feature
-// existed, so nobody's experience changes until they actually customize
-// something. Asset and location tags share it (only the persisted override
-// key differs), matching the single default the webui always used for
-// both.
+// override. Asset and location tags share it (only the persisted override
+// key differs) — there's never been a reason for their starting points to
+// differ.
 var defaultTagSheetSettings = tagSheetSettingsRequest{
 	Rows: 6, Cols: 4, PaddingMm: 2,
 	CutSettings: tagSheetCutSettingsRequest{
-		RasterSpeedMmMin: 3500, RasterPowerPct: 17.5, RasterAirAssist: false,
-		OutlineSpeedMmMin: 1500, OutlinePowerPct: 5, OutlineAirAssist: false,
+		RasterSpeedMmMin: 7000, RasterPowerPct: 32, RasterAirAssist: false, RasterLineIntervalMm: 0.05,
 		CutSpeedMmMin: 600, CutPowerPct: 100, CutAirAssist: true,
 	},
 }

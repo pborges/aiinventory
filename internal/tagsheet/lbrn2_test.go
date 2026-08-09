@@ -69,13 +69,13 @@ func TestRenderLBRN2(t *testing.T) {
 		t.Fatalf("lbrn2 did not parse: %v", err)
 	}
 
-	if len(doc.CutSettings) != 3 {
-		t.Fatalf("got %d CutSettings, want 3", len(doc.CutSettings))
+	if len(doc.CutSettings) != 2 {
+		t.Fatalf("got %d CutSettings, want 2", len(doc.CutSettings))
 	}
-	wantTypes := []string{"Scan", "Cut", "Cut"}
-	wantSpeedMmMin := []float64{DefaultCutSettings.RasterSpeedMmMin, DefaultCutSettings.OutlineSpeedMmMin, DefaultCutSettings.CutSpeedMmMin}
-	wantPowerPct := []float64{DefaultCutSettings.RasterPowerPct, DefaultCutSettings.OutlinePowerPct, DefaultCutSettings.CutPowerPct}
-	wantAirAssist := []bool{DefaultCutSettings.RasterAirAssist, DefaultCutSettings.OutlineAirAssist, DefaultCutSettings.CutAirAssist}
+	wantTypes := []string{"Scan", "Cut"}
+	wantSpeedMmMin := []float64{DefaultCutSettings.RasterSpeedMmMin, DefaultCutSettings.CutSpeedMmMin}
+	wantPowerPct := []float64{DefaultCutSettings.RasterPowerPct, DefaultCutSettings.CutPowerPct}
+	wantAirAssist := []bool{DefaultCutSettings.RasterAirAssist, DefaultCutSettings.CutAirAssist}
 	for i, cs := range doc.CutSettings {
 		if cs.Type != wantTypes[i] {
 			t.Errorf("CutSettings[%d].Type = %q, want %q", i, cs.Type, wantTypes[i])
@@ -112,8 +112,8 @@ func TestRenderLBRN2(t *testing.T) {
 		if sh.Type != "Path" {
 			t.Errorf("shape Type = %q, want Path", sh.Type)
 		}
-		if sh.CutIndex < 0 || sh.CutIndex > 2 {
-			t.Errorf("shape CutIndex = %d, want in [0,2]", sh.CutIndex)
+		if sh.CutIndex < 0 || sh.CutIndex > 1 {
+			t.Errorf("shape CutIndex = %d, want in [0,1]", sh.CutIndex)
 		}
 		if strings.TrimSpace(sh.XForm) != "1 0 0 1 0 0" {
 			t.Errorf("shape XForm = %q, want the identity matrix", sh.XForm)
@@ -158,10 +158,10 @@ func TestRenderLBRN2(t *testing.T) {
 		}
 	}
 
-	if cutIndexCounts[2] != len(sheet.Tags) {
-		t.Errorf("got %d CutIndex=2 (tag boundary) shapes, want %d (one per tag)", cutIndexCounts[2], len(sheet.Tags))
+	if cutIndexCounts[1] != len(sheet.Tags) {
+		t.Errorf("got %d CutIndex=1 (tag boundary) shapes, want %d (one per tag)", cutIndexCounts[1], len(sheet.Tags))
 	}
-	if cutIndexCounts[0] != cutIndexCounts[1] {
-		t.Errorf("CutIndex 0 (fill) and 1 (outline) shape counts differ: %d vs %d — glyph contours should be emitted on both", cutIndexCounts[0], cutIndexCounts[1])
+	if cutIndexCounts[0] == 0 {
+		t.Error("got 0 CutIndex=0 (text fill) shapes, want at least one")
 	}
 }

@@ -17,8 +17,7 @@ import (
 // to pass tagSheetCutSettingsRequest.valid() so rows/cols/padding/codes
 // validation is what's actually under test.
 var validCutSettingsReq = tagSheetCutSettingsRequest{
-	RasterSpeedMmMin: 3000, RasterPowerPct: 40,
-	OutlineSpeedMmMin: 1500, OutlinePowerPct: 25,
+	RasterSpeedMmMin: 3000, RasterPowerPct: 40, RasterLineIntervalMm: 0.05,
 	CutSpeedMmMin: 200, CutPowerPct: 100, CutAirAssist: true,
 }
 
@@ -126,6 +125,7 @@ func TestGenerateTagSheetRejectsBadCutSettings(t *testing.T) {
 		func() tagSheetCutSettingsRequest { c := base; c.RasterSpeedMmMin = -5; return c }(),
 		func() tagSheetCutSettingsRequest { c := base; c.CutPowerPct = 0; return c }(),
 		func() tagSheetCutSettingsRequest { c := base; c.CutPowerPct = 101; return c }(),
+		func() tagSheetCutSettingsRequest { c := base; c.RasterLineIntervalMm = 0; return c }(),
 	} {
 		req := tagSheetRequest{Rows: 2, Cols: 2, PaddingMm: 4, CutSettings: cs}
 		w := doJSON(t, h, http.MethodPost, "/api/tags/sheet", req, cookies)

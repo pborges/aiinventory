@@ -13,43 +13,44 @@ import (
 )
 
 const (
-	tagSheetMaxRows       = 30
-	tagSheetMaxCols       = 20
-	tagSheetMaxPaddingMm  = 50
-	tagSheetMaxCodes      = 600
-	tagSheetMaxSpeedMmMin = 100000
+	tagSheetMaxRows           = 30
+	tagSheetMaxCols           = 20
+	tagSheetMaxPaddingMm      = 50
+	tagSheetMaxCodes          = 600
+	tagSheetMaxSpeedMmMin     = 100000
+	tagSheetMaxLineIntervalMm = 5
 )
 
 type tagSheetCutSettingsRequest struct {
-	RasterSpeedMmMin  float64 `json:"raster_speed_mm_min"`
-	RasterPowerPct    float64 `json:"raster_power_pct"`
-	RasterAirAssist   bool    `json:"raster_air_assist"`
-	OutlineSpeedMmMin float64 `json:"outline_speed_mm_min"`
-	OutlinePowerPct   float64 `json:"outline_power_pct"`
-	OutlineAirAssist  bool    `json:"outline_air_assist"`
-	CutSpeedMmMin     float64 `json:"cut_speed_mm_min"`
-	CutPowerPct       float64 `json:"cut_power_pct"`
-	CutAirAssist      bool    `json:"cut_air_assist"`
+	RasterSpeedMmMin     float64 `json:"raster_speed_mm_min"`
+	RasterPowerPct       float64 `json:"raster_power_pct"`
+	RasterAirAssist      bool    `json:"raster_air_assist"`
+	RasterLineIntervalMm float64 `json:"raster_line_interval_mm"`
+	CutSpeedMmMin        float64 `json:"cut_speed_mm_min"`
+	CutPowerPct          float64 `json:"cut_power_pct"`
+	CutAirAssist         bool    `json:"cut_air_assist"`
 }
 
 func (r tagSheetCutSettingsRequest) valid() bool {
-	for _, speed := range []float64{r.RasterSpeedMmMin, r.OutlineSpeedMmMin, r.CutSpeedMmMin} {
+	for _, speed := range []float64{r.RasterSpeedMmMin, r.CutSpeedMmMin} {
 		if speed <= 0 || speed > tagSheetMaxSpeedMmMin {
 			return false
 		}
 	}
-	for _, power := range []float64{r.RasterPowerPct, r.OutlinePowerPct, r.CutPowerPct} {
+	for _, power := range []float64{r.RasterPowerPct, r.CutPowerPct} {
 		if power <= 0 || power > 100 {
 			return false
 		}
+	}
+	if r.RasterLineIntervalMm <= 0 || r.RasterLineIntervalMm > tagSheetMaxLineIntervalMm {
+		return false
 	}
 	return true
 }
 
 func (r tagSheetCutSettingsRequest) toTagsheet() tagsheet.CutSettings {
 	return tagsheet.CutSettings{
-		RasterSpeedMmMin: r.RasterSpeedMmMin, RasterPowerPct: r.RasterPowerPct, RasterAirAssist: r.RasterAirAssist,
-		OutlineSpeedMmMin: r.OutlineSpeedMmMin, OutlinePowerPct: r.OutlinePowerPct, OutlineAirAssist: r.OutlineAirAssist,
+		RasterSpeedMmMin: r.RasterSpeedMmMin, RasterPowerPct: r.RasterPowerPct, RasterAirAssist: r.RasterAirAssist, RasterLineIntervalMm: r.RasterLineIntervalMm,
 		CutSpeedMmMin: r.CutSpeedMmMin, CutPowerPct: r.CutPowerPct, CutAirAssist: r.CutAirAssist,
 	}
 }

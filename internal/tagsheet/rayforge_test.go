@@ -35,11 +35,12 @@ type rypWorkflowT struct {
 }
 
 type rypStepT struct {
-	Type      string  `json:"type"`
-	StepType  string  `json:"step_type"`
-	CutSpeed  float64 `json:"cut_speed"`
-	Power     float64 `json:"power"`
-	AirAssist bool    `json:"air_assist"`
+	Type           string  `json:"type"`
+	StepType       string  `json:"step_type"`
+	CutSpeed       float64 `json:"cut_speed"`
+	Power          float64 `json:"power"`
+	AirAssist      bool    `json:"air_assist"`
+	LineIntervalMm float64 `json:"line_interval_mm"`
 }
 
 type rypWorkPieceT struct {
@@ -120,8 +121,8 @@ func TestRenderRayforge(t *testing.T) {
 		t.Fatalf("project.json did not parse: %v", err)
 	}
 
-	if len(doc.Children) != 3 {
-		t.Fatalf("got %d layers, want 3", len(doc.Children))
+	if len(doc.Children) != 2 {
+		t.Fatalf("got %d layers, want 2", len(doc.Children))
 	}
 	if len(doc.Assets) != 1 || doc.Assets[0].Type != "source" {
 		t.Fatalf("assets = %+v, want exactly one type=source asset", doc.Assets)
@@ -139,16 +140,16 @@ func TestRenderRayforge(t *testing.T) {
 	}
 
 	wantLayers := []struct {
-		name     string
-		layerID  string
-		stepType string
-		speed    float64
-		power    float64
-		air      bool
+		name           string
+		layerID        string
+		stepType       string
+		speed          float64
+		power          float64
+		air            bool
+		lineIntervalMm float64
 	}{
-		{"Raster Text", "text-fill", "EngraveStep", DefaultCutSettings.RasterSpeedMmMin, DefaultCutSettings.RasterPowerPct / 100, DefaultCutSettings.RasterAirAssist},
-		{"Outline Text", "text-outline", "ContourStep", DefaultCutSettings.OutlineSpeedMmMin, DefaultCutSettings.OutlinePowerPct / 100, DefaultCutSettings.OutlineAirAssist},
-		{"Cut Tag", "cut", "ContourStep", DefaultCutSettings.CutSpeedMmMin, DefaultCutSettings.CutPowerPct / 100, DefaultCutSettings.CutAirAssist},
+		{"Raster Text", "text-fill", "EngraveStep", DefaultCutSettings.RasterSpeedMmMin, DefaultCutSettings.RasterPowerPct / 100, DefaultCutSettings.RasterAirAssist, DefaultCutSettings.RasterLineIntervalMm},
+		{"Cut Tag", "cut", "ContourStep", DefaultCutSettings.CutSpeedMmMin, DefaultCutSettings.CutPowerPct / 100, DefaultCutSettings.CutAirAssist, 0},
 	}
 
 	for i, layer := range doc.Children {
@@ -184,6 +185,9 @@ func TestRenderRayforge(t *testing.T) {
 		}
 		if step.AirAssist != want.air {
 			t.Errorf("layer[%d] step.air_assist = %v, want %v", i, step.AirAssist, want.air)
+		}
+		if want.stepType == "EngraveStep" && step.LineIntervalMm != want.lineIntervalMm {
+			t.Errorf("layer[%d] step.line_interval_mm = %v, want %v", i, step.LineIntervalMm, want.lineIntervalMm)
 		}
 
 		if activeIDs := workpiece.SourceSegment.VectorizationSpec.ActiveLayerIDs; len(activeIDs) != 1 || activeIDs[0] != want.layerID {

@@ -52,8 +52,10 @@ type DownloadFormat = 'svg' | 'lbrn2' | 'rayforge'
 
 /** Generates a laser-cuttable sheet of pre-registered tags: a live preview
  * (debounced as the grid/padding change), per-operation LightBurn speed/
- * power/air-assist fields (defaulted for a 20W diode laser on 3mm
- * basswood, re-rendered into the same previewed codes when tweaked), a
+ * power/air-assist fields — plus a line-spacing field for the raster pass
+ * only, vector cuts having no scan lines — (defaulted for a 20W diode
+ * laser on 3mm basswood, re-rendered into the same previewed codes when
+ * tweaked), a
  * per-code checkbox grid (pre-checked) so codes that didn't cut well can
  * be excluded, a Download button gated by an SVG/LBRN2/Rayforge format
  * radio group plus a "Codes" checkbox that, alongside the sheet file,
@@ -84,12 +86,10 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
   const [cols, setCols] = useState(DEFAULT_COLS)
   const [padding, setPadding] = useState(DEFAULT_PADDING_MM)
 
-  const [rasterSpeed, setRasterSpeed] = useState(3500)
-  const [rasterPower, setRasterPower] = useState(17.5)
+  const [rasterSpeed, setRasterSpeed] = useState(7000)
+  const [rasterPower, setRasterPower] = useState(32)
   const [rasterAirAssist, setRasterAirAssist] = useState(false)
-  const [outlineSpeed, setOutlineSpeed] = useState(1500)
-  const [outlinePower, setOutlinePower] = useState(5)
-  const [outlineAirAssist, setOutlineAirAssist] = useState(false)
+  const [rasterLineInterval, setRasterLineInterval] = useState(0.05)
   const [cutSpeed, setCutSpeed] = useState(600)
   const [cutPower, setCutPower] = useState(100)
   const [cutAirAssist, setCutAirAssist] = useState(true)
@@ -120,9 +120,7 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
     setRasterSpeed(s.cut_settings.raster_speed_mm_min)
     setRasterPower(s.cut_settings.raster_power_pct)
     setRasterAirAssist(s.cut_settings.raster_air_assist)
-    setOutlineSpeed(s.cut_settings.outline_speed_mm_min)
-    setOutlinePower(s.cut_settings.outline_power_pct)
-    setOutlineAirAssist(s.cut_settings.outline_air_assist)
+    setRasterLineInterval(s.cut_settings.raster_line_interval_mm)
     setCutSpeed(s.cut_settings.cut_speed_mm_min)
     setCutPower(s.cut_settings.cut_power_pct)
     setCutAirAssist(s.cut_settings.cut_air_assist)
@@ -190,9 +188,7 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
       raster_speed_mm_min: rasterSpeed,
       raster_power_pct: rasterPower,
       raster_air_assist: rasterAirAssist,
-      outline_speed_mm_min: outlineSpeed,
-      outline_power_pct: outlinePower,
-      outline_air_assist: outlineAirAssist,
+      raster_line_interval_mm: rasterLineInterval,
       cut_speed_mm_min: cutSpeed,
       cut_power_pct: cutPower,
       cut_air_assist: cutAirAssist,
@@ -232,7 +228,7 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
     const timer = setTimeout(() => regenerate({ reuseCodes: true }), DEBOUNCE_MS)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rasterSpeed, rasterPower, rasterAirAssist, outlineSpeed, outlinePower, outlineAirAssist, cutSpeed, cutPower, cutAirAssist])
+  }, [rasterSpeed, rasterPower, rasterAirAssist, rasterLineInterval, cutSpeed, cutPower, cutAirAssist])
 
   useEffect(() => {
     if (!sheet) {
@@ -382,40 +378,17 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
             />
             Air Assist
           </label>
-        </div>
-
-        <div class="generate-tags-cutsettings-row">
-          <span class="generate-tags-cutsettings-label">Outline Text</span>
           <label>
-            Speed
+            Line Spacing
             <input
               class="generate-tags-field"
               type="number"
-              min={1}
-              value={outlineSpeed}
-              onInput={(e) => setOutlineSpeed(Number((e.target as HTMLInputElement).value) || 1)}
+              min={0.01}
+              step={0.01}
+              value={rasterLineInterval}
+              onInput={(e) => setRasterLineInterval(Number((e.target as HTMLInputElement).value) || 0.01)}
             />
-            <span>mm/min</span>
-          </label>
-          <label>
-            Power
-            <input
-              class="generate-tags-field"
-              type="number"
-              min={1}
-              max={100}
-              value={outlinePower}
-              onInput={(e) => setOutlinePower(Number((e.target as HTMLInputElement).value) || 1)}
-            />
-            <span>%</span>
-          </label>
-          <label class="generate-tags-checkbox">
-            <input
-              type="checkbox"
-              checked={outlineAirAssist}
-              onChange={(e) => setOutlineAirAssist((e.target as HTMLInputElement).checked)}
-            />
-            Air Assist
+            <span>mm</span>
           </label>
         </div>
 

@@ -94,28 +94,27 @@ const (
 	bezierK = 0.5522847498
 )
 
-// CutSettings holds the LightBurn speed/power/air-assist for each of the
-// sheet's three cut operations: the raster fill of the text, the vector
-// trace of the text's outline, and the vector cut of the tag's own
-// rounded-rect boundary. Speeds are mm/min — LightBurn's default UI unit —
-// converted to the mm/sec the .lbrn2 file format actually stores at
-// RenderLBRN2 time; powers are percent (0-100].
+// CutSettings holds the LightBurn/Rayforge speed/power/air-assist for each
+// of the sheet's two operations: the raster engrave of the text, and the
+// vector cut of the tag's own rounded-rect boundary. Speeds are mm/min —
+// LightBurn's default UI unit — converted to the mm/sec the .lbrn2 file
+// format actually stores at RenderLBRN2 time; powers are percent (0-100].
+// RasterLineIntervalMm is the raster's line-to-line pitch in mm (smaller is
+// denser/darker coverage) — there's no cut-side equivalent since a vector
+// cut has no scan lines.
 type CutSettings struct {
-	RasterSpeedMmMin, RasterPowerPct   float64
-	RasterAirAssist                    bool
-	OutlineSpeedMmMin, OutlinePowerPct float64
-	OutlineAirAssist                   bool
-	CutSpeedMmMin, CutPowerPct         float64
-	CutAirAssist                       bool
+	RasterSpeedMmMin, RasterPowerPct, RasterLineIntervalMm float64
+	RasterAirAssist                                        bool
+	CutSpeedMmMin, CutPowerPct                             float64
+	CutAirAssist                                           bool
 }
 
 // DefaultCutSettings are reasonable starting points for a 20W diode laser
 // cutting/engraving 60x26mm tags out of 3mm basswood — tune per
-// material/machine in LightBurn after import. Air assist defaults on only
-// for the through-cut, where it matters most for preventing charring and
-// flame-up; the lighter raster/vector passes don't usually need it.
+// material/machine in LightBurn/Rayforge after import. Air assist defaults
+// on only for the through-cut, where it matters most for preventing
+// charring and flame-up; the raster pass doesn't usually need it.
 var DefaultCutSettings = CutSettings{
-	RasterSpeedMmMin: 3000, RasterPowerPct: 40, RasterAirAssist: false,
-	OutlineSpeedMmMin: 1500, OutlinePowerPct: 25, OutlineAirAssist: false,
+	RasterSpeedMmMin: 7000, RasterPowerPct: 32, RasterLineIntervalMm: 0.05, RasterAirAssist: false,
 	CutSpeedMmMin: 200, CutPowerPct: 100, CutAirAssist: true,
 }

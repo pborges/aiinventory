@@ -5,15 +5,14 @@ import (
 	"strings"
 )
 
-// RenderLBRN2 serializes sheet as a native LightBurn project: three
-// CutSettings (Scan "Text Fill", Cut "Text Outline", Cut "Cut", priorities
-// 0/1/2) and one <Shape Type="Path"> per glyph contour (emitted twice, once
-// per text CutIndex — a Scan raster fills the glyph, then a Cut retraces
-// its outline) plus one rounded-rect boundary Shape per tag on the third
-// CutIndex. Every Shape uses an identity XForm; all rotation/translation is
-// already baked into the coordinates by tagsheet.Layout, and the only
-// transform this writer applies itself is the y-flip LightBurn expects
-// (its Y axis increases up, this package's increases down).
+// RenderLBRN2 serializes sheet as a native LightBurn project: two
+// CutSettings (Scan "Text Fill", Cut "Cut", priorities 0/1) and one
+// <Shape Type="Path"> per glyph contour (CutIndex 0, a Scan raster fill)
+// plus one rounded-rect boundary Shape per tag (CutIndex 1). Every Shape
+// uses an identity XForm; all rotation/translation is already baked into
+// the coordinates by tagsheet.Layout, and the only transform this writer
+// applies itself is the y-flip LightBurn expects (its Y axis increases up,
+// this package's increases down).
 //
 // The VertList/PrimList encoding below — the "c0x1"/"c1x1" placeholders
 // for a vertex with no real bezier control on that side, one Shape per
@@ -28,8 +27,7 @@ func RenderLBRN2(sheet Sheet, cs CutSettings) string {
 	b.WriteString(variableTextXML)
 	b.WriteString(uiPrefsXML)
 	b.WriteString(cutSettingXML(0, "Scan", "Text Fill", cs.RasterPowerPct, cs.RasterSpeedMmMin, cs.RasterAirAssist, 0))
-	b.WriteString(cutSettingXML(1, "Cut", "Text Outline", cs.OutlinePowerPct, cs.OutlineSpeedMmMin, cs.OutlineAirAssist, 1))
-	b.WriteString(cutSettingXML(2, "Cut", "Cut", cs.CutPowerPct, cs.CutSpeedMmMin, cs.CutAirAssist, 2))
+	b.WriteString(cutSettingXML(1, "Cut", "Cut", cs.CutPowerPct, cs.CutSpeedMmMin, cs.CutAirAssist, 1))
 	for _, tag := range sheet.Tags {
 		writeTagShapes(&b, tag, sheet.HeightMm)
 	}
@@ -89,18 +87,17 @@ func boolToLBRN2(v bool) string {
 	return "0"
 }
 
-// writeTagShapes emits one tag's Shapes: every glyph contour twice (Scan
-// fill CutIndex 0, then Cut outline CutIndex 1), then the tag's
-// rounded-rect boundary once (Cut CutIndex 2).
+// writeTagShapes emits one tag's Shapes: every glyph contour once (Scan
+// fill CutIndex 0), then the tag's rounded-rect boundary once (Cut
+// CutIndex 1).
 func writeTagShapes(b *strings.Builder, tag TagLayout, sheetHeightMm float64) {
 	for _, glyphPath := range tag.Text {
 		for _, contour := range splitContours(glyphPath) {
 			b.WriteString(contourShapeXML(contour, 0, sheetHeightMm))
-			b.WriteString(contourShapeXML(contour, 1, sheetHeightMm))
 		}
 	}
 	rect := roundedRectPath(tag.X, tag.Y, TagWidthMm, TagHeightMm, TagCornerMm)
-	b.WriteString(contourShapeXML(rect, 2, sheetHeightMm))
+	b.WriteString(contourShapeXML(rect, 1, sheetHeightMm))
 }
 
 // splitContours breaks a glyph's Path (which may describe several

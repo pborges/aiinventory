@@ -8,11 +8,11 @@ import (
 )
 
 // RenderSVG serializes sheet as an SVG document sized in millimeters (1
-// SVG user unit = 1mm) with three layer groups, one per laser op, in cut
-// order: black-filled text (Scan fill), blue-stroked text outline (Cut),
-// red-stroked tag outline (Cut). LightBurn's SVG import maps distinct
-// stroke/fill colors to distinct layers, so these colors aren't
-// cosmetic — they're how the three-op laser workflow survives the import.
+// SVG user unit = 1mm) with two layer groups, one per laser op, in cut
+// order: black-filled text (Scan fill), red-stroked tag outline (Cut).
+// LightBurn's SVG import maps distinct stroke/fill colors to distinct
+// layers, so these colors aren't cosmetic — they're how the two-op laser
+// workflow survives the import.
 func RenderSVG(sheet Sheet) string {
 	w, h := formatNum(sheet.WidthMm), formatNum(sheet.HeightMm)
 
@@ -20,14 +20,6 @@ func RenderSVG(sheet Sheet) string {
 	fmt.Fprintf(&b, `<svg xmlns="http://www.w3.org/2000/svg" width="%smm" height="%smm" viewBox="0 0 %s %s">`+"\n", w, h, w, h)
 
 	b.WriteString(`  <g id="text-fill" fill="#000000">` + "\n")
-	for _, tag := range sheet.Tags {
-		for _, p := range tag.Text {
-			fmt.Fprintf(&b, `    <path d="%s"/>`+"\n", pathToSVGD(p))
-		}
-	}
-	b.WriteString("  </g>\n")
-
-	b.WriteString(`  <g id="text-outline" fill="none" stroke="#0000FF" stroke-width="0.1">` + "\n")
 	for _, tag := range sheet.Tags {
 		for _, p := range tag.Text {
 			fmt.Fprintf(&b, `    <path d="%s"/>`+"\n", pathToSVGD(p))

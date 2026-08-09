@@ -6,12 +6,11 @@ import "github.com/pborges/rayforged"
 // .ryp project file via github.com/pborges/rayforged — a library
 // extracted from this exact code after reverse engineering Rayforge's
 // undocumented project format (see that module's package doc comment
-// for the full story). It produces three layers, one per cut
-// operation (mirroring RenderSVG's three groups and RenderLBRN2's
-// three CutSettings): a raster engrave of the filled text, a vector
-// cut of the text's outline, and a vector cut of the tag's
-// rounded-rect boundary. All three layers' WorkPieces share one
-// SourceAsset — the same document RenderSVG produces.
+// for the full story). It produces two layers, one per cut operation
+// (mirroring RenderSVG's two groups and RenderLBRN2's two
+// CutSettings): a raster engrave of the filled text, and a vector cut
+// of the tag's rounded-rect boundary. Both layers' WorkPieces share
+// one SourceAsset — the same document RenderSVG produces.
 func RenderRayforge(sheet Sheet, cs CutSettings) ([]byte, error) {
 	asset := &rayforged.SourceAsset{
 		Name:     "tag-sheet.svg",
@@ -20,11 +19,10 @@ func RenderRayforge(sheet Sheet, cs CutSettings) ([]byte, error) {
 		HeightMm: sheet.HeightMm,
 	}
 
-	var fillPaths, outlinePaths []rayforged.Path
+	var fillPaths []rayforged.Path
 	for _, tag := range sheet.Tags {
 		for _, p := range tag.Text {
 			fillPaths = append(fillPaths, toRayforgePath(p))
-			outlinePaths = append(outlinePaths, toRayforgePath(p))
 		}
 	}
 	cutPaths := make([]rayforged.Path, len(sheet.Tags))
@@ -36,18 +34,10 @@ func RenderRayforge(sheet Sheet, cs CutSettings) ([]byte, error) {
 
 	raster := doc.AddLayer("Raster Text", "#00ccff")
 	raster.Steps = []rayforged.Step{rayforged.EngraveStep{
-		Name: "Raster Text Engrave", SpeedMmMin: cs.RasterSpeedMmMin, PowerPct: cs.RasterPowerPct, AirAssist: cs.RasterAirAssist,
+		Name: "Raster Text Engrave", SpeedMmMin: cs.RasterSpeedMmMin, PowerPct: cs.RasterPowerPct, AirAssist: cs.RasterAirAssist, LineIntervalMm: cs.RasterLineIntervalMm,
 	}}
 	raster.WorkPieces = []rayforged.WorkPiece{{
 		Name: "Raster Text", Source: asset, SVGLayerID: "text-fill", Geometry: fillPaths,
-	}}
-
-	outline := doc.AddLayer("Outline Text", "#ff6600")
-	outline.Steps = []rayforged.Step{rayforged.ContourStep{
-		Name: "Outline Text Cut", SpeedMmMin: cs.OutlineSpeedMmMin, PowerPct: cs.OutlinePowerPct, AirAssist: cs.OutlineAirAssist, CutSide: rayforged.CutSideCenterline,
-	}}
-	outline.WorkPieces = []rayforged.WorkPiece{{
-		Name: "Outline Text", Source: asset, SVGLayerID: "text-outline", Geometry: outlinePaths,
 	}}
 
 	cut := doc.AddLayer("Cut Tag", "#33cc33")

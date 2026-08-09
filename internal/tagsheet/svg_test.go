@@ -46,16 +46,13 @@ func TestRenderSVG(t *testing.T) {
 		t.Errorf("viewBox = %q, want '0 0 124 26'", doc.ViewBox)
 	}
 
-	if len(doc.Groups) != 3 {
-		t.Fatalf("got %d <g> groups, want 3", len(doc.Groups))
+	if len(doc.Groups) != 2 {
+		t.Fatalf("got %d <g> groups, want 2", len(doc.Groups))
 	}
-	fill, outline, cut := doc.Groups[0], doc.Groups[1], doc.Groups[2]
+	fill, cut := doc.Groups[0], doc.Groups[1]
 
 	if fill.ID != "text-fill" || fill.Fill != "#000000" {
 		t.Errorf("text-fill group = %+v", fill)
-	}
-	if outline.ID != "text-outline" || outline.Stroke != "#0000FF" {
-		t.Errorf("text-outline group = %+v", outline)
 	}
 	if cut.ID != "cut" || cut.Stroke != "#FF0000" {
 		t.Errorf("cut group = %+v", cut)
@@ -67,9 +64,6 @@ func TestRenderSVG(t *testing.T) {
 	}
 	if len(fill.Paths) != wantPaths {
 		t.Errorf("text-fill has %d <path>, want %d", len(fill.Paths), wantPaths)
-	}
-	if len(outline.Paths) != wantPaths {
-		t.Errorf("text-outline has %d <path>, want %d", len(outline.Paths), wantPaths)
 	}
 	for _, p := range fill.Paths {
 		if p.D == "" {
