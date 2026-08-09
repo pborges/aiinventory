@@ -47,8 +47,11 @@ type DownloadFormat = 'svg' | 'lbrn2' | 'rayforge'
  * basswood, re-rendered into the same previewed codes when tweaked), a
  * per-code checkbox grid (pre-checked) so codes that didn't cut well can
  * be excluded, a Download button gated by an SVG/LBRN2/Rayforge format
- * radio group, and a separate Register button that commits only the
- * checked codes — the
+ * radio group plus a "Codes" checkbox that, alongside the sheet file,
+ * downloads a same-GUID-named .txt of the codes on it (both files are
+ * named from a fresh crypto.randomUUID() per download so a sheet and its
+ * codes list can be paired up later), and a separate Register button that
+ * commits only the checked codes — the
  * intended flow is download, cut, uncheck any that failed, then register.
  * Settings uses this for both the asset-tag and location-tag panes, which
  * differ only in which api.* methods and geometry get passed in. */
@@ -78,6 +81,7 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
   const [sheet, setSheet] = useState<TagSheetResponse | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>('rayforge')
+  const [downloadCodesList, setDownloadCodesList] = useState(true)
   const [checkedCodes, setCheckedCodes] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -163,20 +167,27 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
     setError(null)
     setStatus(null)
     try {
-      const dateStamp = new Date().toISOString().slice(0, 10)
+      const guid = crypto.randomUUID()
+      let formatLabel: string
       switch (downloadFormat) {
         case 'svg':
-          downloadText(`${fileBaseName}-${dateStamp}.svg`, sheet.svg, 'image/svg+xml')
-          setStatus('Downloaded SVG.')
+          downloadText(`${guid}.svg`, sheet.svg, 'image/svg+xml')
+          formatLabel = 'SVG'
           break
         case 'lbrn2':
-          downloadText(`${fileBaseName}-${dateStamp}.lbrn2`, sheet.lbrn2, 'application/xml')
-          setStatus('Downloaded LBRN2.')
+          downloadText(`${guid}.lbrn2`, sheet.lbrn2, 'application/xml')
+          formatLabel = 'LBRN2'
           break
         case 'rayforge':
-          downloadBase64(`${fileBaseName}-${dateStamp}.ryp`, sheet.rayforge, 'application/zip')
-          setStatus('Downloaded Rayforge project.')
+          downloadBase64(`${guid}.ryp`, sheet.rayforge, 'application/zip')
+          formatLabel = 'Rayforge project'
           break
+      }
+      if (downloadCodesList) {
+        downloadText(`${guid}.txt`, sheet.codes.join('\n'), 'text/plain')
+        setStatus(`Downloaded ${formatLabel} and codes list.`)
+      } else {
+        setStatus(`Downloaded ${formatLabel}.`)
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to download')
@@ -399,6 +410,14 @@ export function GenerateTagsSection({ title, generate, register, fileBaseName, o
             onChange={() => setDownloadFormat('rayforge')}
           />
           Rayforge
+        </label>
+        <label class="generate-tags-checkbox">
+          <input
+            type="checkbox"
+            checked={downloadCodesList}
+            onChange={(e) => setDownloadCodesList((e.target as HTMLInputElement).checked)}
+          />
+          Codes
         </label>
         <button type="button" class="btn-primary" onClick={onDownload} disabled={busy || !sheet}>
           Download
