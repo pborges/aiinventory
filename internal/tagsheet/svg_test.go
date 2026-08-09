@@ -36,14 +36,14 @@ func TestRenderSVG(t *testing.T) {
 		t.Fatalf("SVG did not parse: %v", err)
 	}
 
-	if doc.Width != "124mm" {
-		t.Errorf("width = %q, want 124mm", doc.Width)
+	if doc.Width != "132mm" {
+		t.Errorf("width = %q, want 132mm", doc.Width)
 	}
-	if doc.Height != "26mm" {
-		t.Errorf("height = %q, want 26mm", doc.Height)
+	if doc.Height != "34mm" {
+		t.Errorf("height = %q, want 34mm", doc.Height)
 	}
-	if doc.ViewBox != "0 0 124 26" {
-		t.Errorf("viewBox = %q, want '0 0 124 26'", doc.ViewBox)
+	if doc.ViewBox != "0 0 132 34" {
+		t.Errorf("viewBox = %q, want '0 0 132 34'", doc.ViewBox)
 	}
 
 	if len(doc.Groups) != 2 {

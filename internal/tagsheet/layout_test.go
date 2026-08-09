@@ -16,11 +16,11 @@ func TestLayoutSheetDimensionsAndGrid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !approxEqual(sheet.WidthMm, 252, 1e-9) {
-		t.Errorf("WidthMm = %v, want 252", sheet.WidthMm)
+	if !approxEqual(sheet.WidthMm, 260, 1e-9) {
+		t.Errorf("WidthMm = %v, want 260", sheet.WidthMm)
 	}
-	if !approxEqual(sheet.HeightMm, 236, 1e-9) {
-		t.Errorf("HeightMm = %v, want 236", sheet.HeightMm)
+	if !approxEqual(sheet.HeightMm, 244, 1e-9) {
+		t.Errorf("HeightMm = %v, want 244", sheet.HeightMm)
 	}
 	if len(sheet.Tags) != 32 {
 		t.Fatalf("got %d tags, want 32", len(sheet.Tags))
@@ -28,8 +28,8 @@ func TestLayoutSheetDimensionsAndGrid(t *testing.T) {
 
 	// Row-major order: tag[5] is row 1, col 1 (0-indexed).
 	tag5 := sheet.Tags[5]
-	if !approxEqual(tag5.X, 64, 1e-9) || !approxEqual(tag5.Y, 30, 1e-9) {
-		t.Errorf("tag[5] origin = (%v, %v), want (64, 30)", tag5.X, tag5.Y)
+	if !approxEqual(tag5.X, 68, 1e-9) || !approxEqual(tag5.Y, 34, 1e-9) {
+		t.Errorf("tag[5] origin = (%v, %v), want (68, 34)", tag5.X, tag5.Y)
 	}
 }
 

@@ -18,8 +18,9 @@ func (r rect) centerY() float64 { return (r.Min.Y + r.Max.Y) / 2 }
 
 // Layout places codes into a rows×cols grid of tags (row-major: left to
 // right, then top to bottom) and lays out each tag's rendered text —
-// rotated/positioned per the fixed geometry spec for kind. paddingMm is the
-// gap between adjacent tags; there is no outer sheet margin.
+// rotated/positioned per the fixed geometry spec for kind. paddingMm is both
+// the gap between adjacent tags and the sheet's outer margin, so the grid
+// reads as evenly spaced right out to its edges.
 func Layout(kind Kind, codes []string, rows, cols int, paddingMm float64) (Sheet, error) {
 	if len(codes) != rows*cols {
 		return Sheet{}, fmt.Errorf("tagsheet: got %d codes, need %d for a %d×%d sheet", len(codes), rows*cols, cols, rows)
@@ -31,8 +32,8 @@ func Layout(kind Kind, codes []string, rows, cols int, paddingMm float64) (Sheet
 	}
 
 	sheet := Sheet{
-		WidthMm:  float64(cols)*TagWidthMm + float64(cols-1)*paddingMm,
-		HeightMm: float64(rows)*TagHeightMm + float64(rows-1)*paddingMm,
+		WidthMm:  float64(cols)*TagWidthMm + float64(cols-1)*paddingMm + 2*paddingMm,
+		HeightMm: float64(rows)*TagHeightMm + float64(rows-1)*paddingMm + 2*paddingMm,
 		Tags:     make([]TagLayout, 0, len(codes)),
 	}
 
@@ -41,8 +42,8 @@ func Layout(kind Kind, codes []string, rows, cols int, paddingMm float64) (Sheet
 		for col := range cols {
 			code := codes[i]
 			i++
-			tagX := float64(col) * (TagWidthMm + paddingMm)
-			tagY := float64(row) * (TagHeightMm + paddingMm)
+			tagX := paddingMm + float64(col)*(TagWidthMm+paddingMm)
+			tagY := paddingMm + float64(row)*(TagHeightMm+paddingMm)
 
 			var text []Path
 			switch kind {
