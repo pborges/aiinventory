@@ -370,14 +370,6 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
             />
             <span>%</span>
           </label>
-          <label class="generate-tags-checkbox">
-            <input
-              type="checkbox"
-              checked={rasterAirAssist}
-              onChange={(e) => setRasterAirAssist((e.target as HTMLInputElement).checked)}
-            />
-            Air Assist
-          </label>
           <label>
             Line Spacing
             <input
@@ -389,6 +381,14 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
               onInput={(e) => setRasterLineInterval(Number((e.target as HTMLInputElement).value) || 0.01)}
             />
             <span>mm</span>
+          </label>
+          <label class="generate-tags-checkbox">
+            <input
+              type="checkbox"
+              checked={rasterAirAssist}
+              onChange={(e) => setRasterAirAssist((e.target as HTMLInputElement).checked)}
+            />
+            Air Assist
           </label>
         </div>
 
