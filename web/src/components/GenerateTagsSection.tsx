@@ -310,53 +310,45 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
     <section class="settings-registry">
       <h2>{title}</h2>
 
-      <div class="generate-tags-form">
-        <label>
-          Columns
-          <input
-            class="generate-tags-field"
-            type="number"
-            min={1}
-            max={20}
-            value={cols}
-            onInput={(e) => setCols(Number((e.target as HTMLInputElement).value) || 1)}
-          />
-        </label>
-        <label>
-          Rows
-          <input
-            class="generate-tags-field"
-            type="number"
-            min={1}
-            max={30}
-            value={rows}
-            onInput={(e) => setRows(Number((e.target as HTMLInputElement).value) || 1)}
-          />
-        </label>
-        <label class="generate-tags-unit">
-          Padding
-          <input
-            class="generate-tags-field"
-            type="number"
-            min={0}
-            max={50}
-            value={padding}
-            onInput={(e) => setPadding(Number((e.target as HTMLInputElement).value) || 0)}
-          />
-          <span>mm</span>
-        </label>
-        <button type="button" onClick={() => regenerate()} disabled={busy}>
-          New Codes
-        </button>
-        <button type="button" onClick={onSaveSettings} disabled={busy || !settingsLoaded}>
-          Save
-        </button>
-        <button type="button" onClick={onRestoreDefaults} disabled={busy || !settingsLoaded}>
-          Restore Defaults
-        </button>
-      </div>
-
       <div class="generate-tags-cutsettings">
+        <div class="generate-tags-cutsettings-row">
+          <span class="generate-tags-cutsettings-label">Grid</span>
+          <label>
+            Columns
+            <input
+              class="generate-tags-field"
+              type="number"
+              min={1}
+              max={20}
+              value={cols}
+              onInput={(e) => setCols(Number((e.target as HTMLInputElement).value) || 1)}
+            />
+          </label>
+          <label>
+            Rows
+            <input
+              class="generate-tags-field"
+              type="number"
+              min={1}
+              max={30}
+              value={rows}
+              onInput={(e) => setRows(Number((e.target as HTMLInputElement).value) || 1)}
+            />
+          </label>
+          <label class="generate-tags-unit">
+            Padding
+            <input
+              class="generate-tags-field"
+              type="number"
+              min={0}
+              max={50}
+              value={padding}
+              onInput={(e) => setPadding(Number((e.target as HTMLInputElement).value) || 0)}
+            />
+            <span>mm</span>
+          </label>
+        </div>
+
         <div class="generate-tags-cutsettings-row">
           <span class="generate-tags-cutsettings-label">Raster Text</span>
           <label>
@@ -456,6 +448,18 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
             <input type="checkbox" checked={cutAirAssist} onChange={(e) => setCutAirAssist((e.target as HTMLInputElement).checked)} />
             Air Assist
           </label>
+        </div>
+
+        <div class="generate-tags-cutsettings-row generate-tags-cutsettings-actions">
+          <button type="button" onClick={() => regenerate()} disabled={busy}>
+            New Codes
+          </button>
+          <button type="button" onClick={onSaveSettings} disabled={busy || !settingsLoaded}>
+            Save
+          </button>
+          <button type="button" onClick={onRestoreDefaults} disabled={busy || !settingsLoaded}>
+            Restore Defaults
+          </button>
         </div>
       </div>
 
