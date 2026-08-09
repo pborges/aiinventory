@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { faTrashCan } from '@fortawesome/free-solid-svg-icons'
 import { ApiError, type RegisteredTagEntry, type UploadRegisteredTagsResponse } from '../api/client'
+import { Icon } from './Icon'
 
 interface Props {
   title: string
@@ -92,19 +94,6 @@ export function RegisteredTagsSection({ title, pattern, placeholder, list, creat
     <section class="settings-registry">
       <h2>{title}</h2>
 
-      <ul class="settings-registry-list">
-        {tags === null && <li>Loading…</li>}
-        {tags?.length === 0 && <li class="settings-registry-empty">No tags registered yet.</li>}
-        {tags?.map((entry) => (
-          <li class="settings-registry-row" key={entry.id}>
-            <span class="settings-registry-tag">{entry.tag}</span>
-            <button type="button" onClick={() => onDelete(entry)} disabled={busy}>
-              Delete
-            </button>
-          </li>
-        ))}
-      </ul>
-
       <form class="settings-new-registry-form" onSubmit={onCreate}>
         <input
           type="text"
@@ -125,6 +114,26 @@ export function RegisteredTagsSection({ title, pattern, placeholder, list, creat
       </label>
       {uploadStatus && <p class="settings-status">{uploadStatus}</p>}
       {error && <p class="settings-status settings-status-error">{error}</p>}
+
+      <ul class="settings-registry-list">
+        {tags === null && <li>Loading…</li>}
+        {tags?.length === 0 && <li class="settings-registry-empty">No tags registered yet.</li>}
+        {tags?.map((entry) => (
+          <li class="settings-registry-row" key={entry.id}>
+            <span class="settings-registry-tag">{entry.tag}</span>
+            <button
+              type="button"
+              class="settings-registry-delete"
+              onClick={() => onDelete(entry)}
+              disabled={busy}
+              aria-label={`Delete ${entry.tag}`}
+              title={`Delete ${entry.tag}`}
+            >
+              <Icon icon={faTrashCan} />
+            </button>
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }

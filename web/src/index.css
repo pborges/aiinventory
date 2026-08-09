@@ -2067,10 +2067,26 @@ button.label-chip:hover {
   font-size: 0.9rem;
 }
 
-.settings-registry-row button {
-  padding: 0.15rem 0.55rem;
-  font-size: 0.8rem;
+.settings-registry-delete {
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: none;
   cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0.15rem 0.3rem;
+  color: var(--accent-pink);
+  opacity: 0.75;
+}
+
+.settings-registry-delete:hover {
+  opacity: 1;
+}
+
+.settings-registry-delete:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .settings-new-registry-form {
