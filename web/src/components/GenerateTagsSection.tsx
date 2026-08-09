@@ -66,10 +66,11 @@ type DownloadFormat = 'svg' | 'lbrn2' | 'rayforge'
  * differ only in which api.* methods and geometry get passed in. Rows/
  * cols/padding/cut-settings are per-user persisted server-side (getSettings/
  * saveSettings/resetSettings): loaded on mount in place of the hardcoded
- * literals below, autosaved (same debounce as the preview) whenever they
- * change, and reset via the "Restore Defaults" button — which restores
- * exactly those hardcoded literals, since that's the server's own
- * fallback for a user with no saved override. */
+ * literals below, written back only on an explicit Save click (no
+ * autosave-on-change/tab-out — a mid-tweak value shouldn't silently
+ * become the new persisted default), and reset via "Restore Defaults" —
+ * which restores exactly those hardcoded literals, since that's the
+ * server's own fallback for a user with no saved override. */
 // DEFAULT_ROWS/COLS/PADDING_MM: a 60x26mm grid (at a laser-safe ~2mm
 // kerf gap) that fits an 8.5x11in sheet in landscape — 4 cols x 60mm +
 // 3 gaps = 246mm of 279.4mm (11in), 6 rows x 26mm + 5 gaps = 166mm of
@@ -103,14 +104,10 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
   const [status, setStatus] = useState<string | null>(null)
 
   // Tracks whether the persisted settings fetch (below) has resolved, so
-  // the rows/cols/padding/cut-settings effects don't autosave the
-  // hardcoded placeholder state back to the server before the user's real
-  // saved values (or the server's defaults) have even loaded.
+  // Save/Restore Defaults can't fire — and potentially clobber a real
+  // saved config with the hardcoded placeholder state — before it's known
+  // whether that placeholder state is even still current.
   const [settingsLoaded, setSettingsLoaded] = useState(false)
-  // The last settings payload known to match what's persisted (just loaded,
-  // or just saved) — lets the autosave effects skip a redundant PUT when
-  // the values that changed are the ones settings-loading itself just set.
-  const lastPersistedRef = useRef<string | null>(null)
 
   function settingsPayload(): TagSheetSettings {
     return { rows, cols, padding_mm: padding, cut_settings: cutSettingsPayload() }
@@ -131,16 +128,6 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
     setCutAirAssist(s.cut_settings.cut_air_assist)
   }
 
-  function persistSettingsIfChanged() {
-    if (!settingsLoaded) return
-    const serialized = JSON.stringify(settingsPayload())
-    if (serialized === lastPersistedRef.current) return
-    lastPersistedRef.current = serialized
-    saveSettings(JSON.parse(serialized)).catch((err) => {
-      setError(err instanceof ApiError ? err.message : 'Failed to save settings')
-    })
-  }
-
   // Loads this user's saved rows/cols/padding/cut-settings once on mount,
   // replacing the hardcoded placeholder state above — falls back to
   // whatever's already there (the same hardcoded defaults the server would
@@ -151,7 +138,6 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
       .then((s) => {
         if (cancelled) return
         applySettings(s)
-        lastPersistedRef.current = JSON.stringify(s)
         setSettingsLoaded(true)
       })
       .catch(() => setSettingsLoaded(true))
@@ -161,6 +147,20 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  async function onSaveSettings() {
+    setBusy(true)
+    setError(null)
+    setStatus(null)
+    try {
+      await saveSettings(settingsPayload())
+      setStatus('Settings saved.')
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to save settings')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function onRestoreDefaults() {
     setBusy(true)
     setError(null)
@@ -168,7 +168,6 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
     try {
       const defaults = await resetSettings()
       applySettings(defaults)
-      lastPersistedRef.current = JSON.stringify(defaults)
       setStatus('Restored default settings.')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to restore defaults')
@@ -216,10 +215,7 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
   }
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      regenerate()
-      persistSettingsIfChanged()
-    }, DEBOUNCE_MS)
+    const timer = setTimeout(() => regenerate(), DEBOUNCE_MS)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, cols, padding])
@@ -233,10 +229,7 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
       skippedInitialCutSettingsRender.current = true
       return
     }
-    const timer = setTimeout(() => {
-      regenerate({ reuseCodes: true })
-      persistSettingsIfChanged()
-    }, DEBOUNCE_MS)
+    const timer = setTimeout(() => regenerate({ reuseCodes: true }), DEBOUNCE_MS)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rasterSpeed, rasterPower, rasterAirAssist, outlineSpeed, outlinePower, outlineAirAssist, cutSpeed, cutPower, cutAirAssist])
@@ -355,7 +348,10 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
         <button type="button" onClick={() => regenerate()} disabled={busy}>
           New Codes
         </button>
-        <button type="button" onClick={onRestoreDefaults} disabled={busy}>
+        <button type="button" onClick={onSaveSettings} disabled={busy || !settingsLoaded}>
+          Save
+        </button>
+        <button type="button" onClick={onRestoreDefaults} disabled={busy || !settingsLoaded}>
           Restore Defaults
         </button>
       </div>
