@@ -1,9 +1,9 @@
 package tagsheet
 
-import "github.com/pborges/rayforge"
+import "github.com/pborges/rayforged"
 
 // RenderRayforge serializes sheet as a native Rayforge (rayforge.org)
-// .ryp project file via github.com/pborges/rayforge — a library
+// .ryp project file via github.com/pborges/rayforged — a library
 // extracted from this exact code after reverse engineering Rayforge's
 // undocumented project format (see that module's package doc comment
 // for the full story). It produces three layers, one per cut
@@ -62,7 +62,7 @@ func RenderRayforge(sheet Sheet, cs CutSettings) ([]byte, error) {
 }
 
 // toRayforgePath converts this package's own Path/Seg representation
-// (shared with svg.go and lbrn2.go) into github.com/pborges/rayforge's
+// (shared with svg.go and lbrn2.go) into github.com/pborges/rayforged's
 // equivalent — the two are structurally identical (they share a
 // common origin: the rayforge library's geometry types were extracted
 // from this package's own), just distinct Go types across the module

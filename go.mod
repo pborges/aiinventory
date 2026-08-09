@@ -3,7 +3,7 @@ module github.com/pborges/aiinventory
 go 1.26
 
 require (
-	github.com/pborges/rayforge v0.0.0-20260808225253-add04567361d
+	github.com/pborges/rayforged v0.0.0-20260809054125-356528dcf15b
 	github.com/pressly/goose/v3 v3.27.3
 	golang.org/x/crypto v0.54.0
 	golang.org/x/image v0.44.0

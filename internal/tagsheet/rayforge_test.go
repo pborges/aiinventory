@@ -7,11 +7,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/pborges/rayforge"
+	"github.com/pborges/rayforged"
 )
 
 // The detailed .ryp JSON shape (opsproducer_dict, top-level vs nested
-// fields, matrices, ...) is github.com/pborges/rayforge's own concern
+// fields, matrices, ...) is github.com/pborges/rayforged's own concern
 // and covered by its test suite. This package only needs to verify
 // its own integration: that CutSettings values reach the right steps,
 // the three layers/paths are wired up correctly, and the path-type
