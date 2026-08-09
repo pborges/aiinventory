@@ -35,10 +35,14 @@ func RenderSVG(sheet Sheet) string {
 	}
 	b.WriteString("  </g>\n")
 
+	// A native <rect> can't control where its own path starts, and that
+	// start point is where the laser's start/end seam (and its scorch
+	// mark) ends up — so the cut boundary is built via roundedRectPath,
+	// same as the LightBurn/Rayforge exporters, to keep all three
+	// formats' cut seam at the same corner.
 	b.WriteString(`  <g id="cut" fill="none" stroke="#FF0000" stroke-width="0.1">` + "\n")
 	for _, tag := range sheet.Tags {
-		fmt.Fprintf(&b, `    <rect x="%s" y="%s" width="%s" height="%s" rx="%s" ry="%s"/>`+"\n",
-			formatNum(tag.X), formatNum(tag.Y), formatNum(TagWidthMm), formatNum(TagHeightMm), formatNum(TagCornerMm), formatNum(TagCornerMm))
+		fmt.Fprintf(&b, `    <path d="%s"/>`+"\n", pathToSVGD(roundedRectPath(tag.X, tag.Y, TagWidthMm, TagHeightMm, TagCornerMm)))
 	}
 	b.WriteString("  </g>\n")
 

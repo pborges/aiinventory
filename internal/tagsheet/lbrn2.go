@@ -252,15 +252,20 @@ func roundedRectPath(x, y, w, h, r float64) Path {
 	v6 := Point{X: x, Y: y + h - r}
 	v7 := Point{X: x, Y: y + r}
 
+	// Starts on the bottom edge just left of the bottom-right corner
+	// (v4) instead of the top-left corner: wherever a closed cut path
+	// opens and closes is where the laser dwells an instant longer,
+	// leaving a small scorch mark, and the bottom-right corner is the
+	// least conspicuous place for that to land on a mounted tag.
 	return Path{
-		{Op: OpMove, Pts: [3]Point{v0}},
-		{Op: OpLine, Pts: [3]Point{v1}},
-		{Op: OpCube, Pts: [3]Point{{X: v1.X + k, Y: v1.Y}, {X: v2.X, Y: v2.Y - k}, v2}},
-		{Op: OpLine, Pts: [3]Point{v3}},
-		{Op: OpCube, Pts: [3]Point{{X: v3.X, Y: v3.Y + k}, {X: v4.X + k, Y: v4.Y}, v4}},
+		{Op: OpMove, Pts: [3]Point{v4}},
 		{Op: OpLine, Pts: [3]Point{v5}},
 		{Op: OpCube, Pts: [3]Point{{X: v5.X - k, Y: v5.Y}, {X: v6.X, Y: v6.Y + k}, v6}},
 		{Op: OpLine, Pts: [3]Point{v7}},
 		{Op: OpCube, Pts: [3]Point{{X: v7.X, Y: v7.Y - k}, {X: v0.X - k, Y: v0.Y}, v0}},
+		{Op: OpLine, Pts: [3]Point{v1}},
+		{Op: OpCube, Pts: [3]Point{{X: v1.X + k, Y: v1.Y}, {X: v2.X, Y: v2.Y - k}, v2}},
+		{Op: OpLine, Pts: [3]Point{v3}},
+		{Op: OpCube, Pts: [3]Point{{X: v3.X, Y: v3.Y + k}, {X: v4.X + k, Y: v4.Y}, v4}},
 	}
 }

@@ -18,17 +18,10 @@ type svgGroup struct {
 	Fill   string       `xml:"fill,attr"`
 	Stroke string       `xml:"stroke,attr"`
 	Paths  []svgPathTag `xml:"path"`
-	Rects  []svgRectTag `xml:"rect"`
 }
 
 type svgPathTag struct {
 	D string `xml:"d,attr"`
-}
-
-type svgRectTag struct {
-	X  string `xml:"x,attr"`
-	Y  string `xml:"y,attr"`
-	Rx string `xml:"rx,attr"`
 }
 
 func TestRenderSVG(t *testing.T) {
@@ -84,12 +77,17 @@ func TestRenderSVG(t *testing.T) {
 		}
 	}
 
-	if len(cut.Rects) != len(sheet.Tags) {
-		t.Errorf("cut has %d <rect>, want %d (one per tag)", len(cut.Rects), len(sheet.Tags))
+	if len(cut.Paths) != len(sheet.Tags) {
+		t.Errorf("cut has %d <path>, want %d (one per tag)", len(cut.Paths), len(sheet.Tags))
 	}
-	for i, r := range cut.Rects {
-		if r.Rx != "2" {
-			t.Errorf("rect[%d].rx = %q, want 2", i, r.Rx)
+	// The cut boundary starts (and closes) on the bottom edge next to
+	// the bottom-right corner, not the top-left, so the laser's
+	// start/end seam lands on the least conspicuous corner of a
+	// mounted tag.
+	for i, tag := range sheet.Tags {
+		wantStart := "M" + formatNum(tag.X+TagWidthMm-TagCornerMm) + "," + formatNum(tag.Y+TagHeightMm)
+		if got := cut.Paths[i].D; len(got) < len(wantStart) || got[:len(wantStart)] != wantStart {
+			t.Errorf("cut path[%d].d starts %q, want prefix %q", i, got, wantStart)
 		}
 	}
 }
