@@ -550,11 +550,6 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
           Register
         </button>
       </div>
-      <p class="settings-status">
-        Speeds/powers default for a 20W diode laser on 3mm basswood — tune per material/machine in LightBurn or
-        Rayforge. Download, cut the sheet, uncheck any codes that didn't cut well, then Register to commit the rest
-        to the registry above.
-      </p>
       {status && <p class="settings-status">{status}</p>}
       {error && <p class="settings-status settings-status-error">{error}</p>}
     </section>
