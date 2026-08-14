@@ -107,6 +107,11 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+  // Surfaced as a modal rather than the inline status line below the
+  // preview/actions — that line sits well below the "Load Codes" file
+  // picker up top, so a too-many-codes rejection there reads as the click
+  // having done nothing.
+  const [tooManyCodesError, setTooManyCodesError] = useState<string | null>(null)
 
   // Tracks whether the persisted settings fetch (below) has resolved, so
   // Save/Restore Defaults can't fire — and potentially clobber a real
@@ -240,7 +245,10 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
         return
       }
       if (codes.length > rows * cols) {
-        setError(`File has ${codes.length} codes, but the ${rows}×${cols} grid only holds ${rows * cols}. Increase rows/cols or trim the file.`)
+        setTooManyCodesError(
+          `File has ${codes.length} codes, but the ${rows}×${cols} grid only holds ${rows * cols}. Increase rows/cols or trim the file.`,
+        )
+        if (fileInputRef.current) fileInputRef.current.value = ''
         return
       }
       const resp = await generate(rows, cols, padding, cutSettingsPayload(), codes)
@@ -552,6 +560,20 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
       </div>
       {status && <p class="settings-status">{status}</p>}
       {error && <p class="settings-status settings-status-error">{error}</p>}
+
+      {tooManyCodesError && (
+        <div class="modal-overlay">
+          <div class="modal-panel">
+            <h2>Too many codes</h2>
+            <p>{tooManyCodesError}</p>
+            <div class="modal-actions">
+              <button type="button" class="btn-primary" onClick={() => setTooManyCodesError(null)}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
