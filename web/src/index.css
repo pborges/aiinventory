@@ -2171,6 +2171,11 @@ button.label-chip:hover {
   font-weight: 600;
 }
 
+.generate-tags-file-input {
+  font-size: 0.85rem;
+  max-width: 16rem;
+}
+
 .generate-tags-preview {
   background: #fff;
   border: 1px solid var(--border);

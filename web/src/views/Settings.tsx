@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { route } from 'preact-router'
 import { api, ApiError, type Settings as SettingsData, type UserListItem } from '../api/client'
 import { currentUser } from '../state/auth'
 import { Header } from '../components/Header'
@@ -10,6 +11,7 @@ import { GenerateTagsSection } from '../components/GenerateTagsSection'
 interface RouteProps {
   path?: string
   default?: boolean
+  section?: string
 }
 
 type SettingsSection =
@@ -28,6 +30,12 @@ const SETTINGS_SECTIONS: { key: SettingsSection; label: string }[] = [
   { key: 'location-tags', label: 'Location Tags' },
   { key: 'generate-location-tags', label: 'Generate Location Tags' },
 ]
+
+const DEFAULT_SETTINGS_SECTION: SettingsSection = 'gemini'
+
+function isSettingsSection(value: string | undefined): value is SettingsSection {
+  return SETTINGS_SECTIONS.some((s) => s.key === value)
+}
 
 const ASSET_TAG_PATTERN = /^[A-Z]{4}$/
 const LOCATION_TAG_PATTERN = /^@[A-Z]{3}$/
@@ -50,8 +58,10 @@ const MODEL_SUGGESTIONS = [
   'gemini-2.5-pro',
 ]
 
-export function Settings(_props: RouteProps) {
-  const [section, setSection] = useState<SettingsSection>('gemini')
+export function Settings(props: RouteProps) {
+  const [section, setSection] = useState<SettingsSection>(
+    isSettingsSection(props.section) ? props.section : DEFAULT_SETTINGS_SECTION,
+  )
   const [data, setData] = useState<SettingsData | null>(null)
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('')
@@ -72,6 +82,22 @@ export function Settings(_props: RouteProps) {
   // RegisteredTagsSection reloads its list — see refreshKey on that component.
   const [assetTagsRefreshKey, setAssetTagsRefreshKey] = useState(0)
   const [locationTagsRefreshKey, setLocationTagsRefreshKey] = useState(0)
+
+  // Keeps the active tab in sync with the URL's :section segment — so
+  // browser back/forward (and a plain refresh, since the initial state
+  // above already reads it) land on the same sub-page instead of always
+  // resetting to Gemini configuration.
+  useEffect(() => {
+    if (isSettingsSection(props.section) && props.section !== section) {
+      setSection(props.section)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.section])
+
+  function selectSection(key: SettingsSection) {
+    setSection(key)
+    route(`/settings/${key}`)
+  }
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -175,7 +201,7 @@ export function Settings(_props: RouteProps) {
                 <li
                   key={key}
                   class={'settings-nav-item' + (section === key ? ' settings-nav-item-active' : '')}
-                  onClick={() => setSection(key)}
+                  onClick={() => selectSection(key)}
                 >
                   {label}
                 </li>

@@ -20,10 +20,13 @@ func (r rect) centerY() float64 { return (r.Min.Y + r.Max.Y) / 2 }
 // right, then top to bottom) and lays out each tag's rendered text —
 // rotated/positioned per the fixed geometry spec for kind. paddingMm is both
 // the gap between adjacent tags and the sheet's outer margin, so the grid
-// reads as evenly spaced right out to its edges.
+// reads as evenly spaced right out to its edges. codes may be shorter than
+// rows*cols — the sheet keeps its full rows×cols size, but only the leading
+// len(codes) cells (row-major) get a tag; the rest are left blank. It's an
+// error to pass more codes than the grid has cells for.
 func Layout(kind Kind, codes []string, rows, cols int, paddingMm float64) (Sheet, error) {
-	if len(codes) != rows*cols {
-		return Sheet{}, fmt.Errorf("tagsheet: got %d codes, need %d for a %d×%d sheet", len(codes), rows*cols, cols, rows)
+	if len(codes) > rows*cols {
+		return Sheet{}, fmt.Errorf("tagsheet: got %d codes, grid only holds %d for a %d×%d sheet", len(codes), rows*cols, cols, rows)
 	}
 
 	f, err := loadOCRFont()
@@ -37,23 +40,20 @@ func Layout(kind Kind, codes []string, rows, cols int, paddingMm float64) (Sheet
 		Tags:     make([]TagLayout, 0, len(codes)),
 	}
 
-	i := 0
-	for row := range rows {
-		for col := range cols {
-			code := codes[i]
-			i++
-			tagX := paddingMm + float64(col)*(TagWidthMm+paddingMm)
-			tagY := paddingMm + float64(row)*(TagHeightMm+paddingMm)
+	for i, code := range codes {
+		row := i / cols
+		col := i % cols
+		tagX := paddingMm + float64(col)*(TagWidthMm+paddingMm)
+		tagY := paddingMm + float64(row)*(TagHeightMm+paddingMm)
 
-			var text []Path
-			switch kind {
-			case KindAsset:
-				text = layoutAssetText(f, code, tagX, tagY)
-			case KindLocation:
-				text = layoutLocationText(f, code, tagX, tagY)
-			}
-			sheet.Tags = append(sheet.Tags, TagLayout{Code: code, X: tagX, Y: tagY, Text: text})
+		var text []Path
+		switch kind {
+		case KindAsset:
+			text = layoutAssetText(f, code, tagX, tagY)
+		case KindLocation:
+			text = layoutLocationText(f, code, tagX, tagY)
 		}
+		sheet.Tags = append(sheet.Tags, TagLayout{Code: code, X: tagX, Y: tagY, Text: text})
 	}
 	return sheet, nil
 }

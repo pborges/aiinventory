@@ -57,7 +57,10 @@ type DownloadFormat = 'svg' | 'lbrn2' | 'rayforge'
  * laser on 3mm basswood, re-rendered into the same previewed codes when
  * tweaked), a
  * per-code checkbox grid (pre-checked) so codes that didn't cut well can
- * be excluded, a Download button gated by an SVG/LBRN2/Rayforge format
+ * be excluded, a "Load Codes" file picker that renders an operator-supplied
+ * newline-separated .txt of codes instead of a random draw — one tag per
+ * code, up to rows*cols, with any leftover grid cells left blank rather
+ * than padded out — a Download button gated by an SVG/LBRN2/Rayforge format
  * radio group plus a "Codes" checkbox that, alongside the sheet file,
  * downloads a same-GUID-named .txt of the codes on it (both files are
  * named from a fresh crypto.randomUUID() per download so a sheet and its
@@ -93,6 +96,8 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
   const [cutSpeed, setCutSpeed] = useState(600)
   const [cutPower, setCutPower] = useState(100)
   const [cutAirAssist, setCutAirAssist] = useState(true)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [sheet, setSheet] = useState<TagSheetResponse | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -205,6 +210,45 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
       setSheet(resp)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to generate preview')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Renders exactly the codes in the chosen .txt (one label per line,
+  // blank lines ignored) instead of a fresh random draw — one tag per
+  // code, up to rows*cols; if the file has fewer codes than the grid
+  // holds, the remaining cells are simply left blank rather than padded
+  // out with random codes.
+  async function onLoadCodes() {
+    const file = fileInputRef.current?.files?.[0]
+    if (!file) {
+      setError('Choose a .txt file first')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    setStatus(null)
+    try {
+      const text = await file.text()
+      const codes = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+      if (!codes.length) {
+        setError('That file has no codes in it')
+        return
+      }
+      if (codes.length > rows * cols) {
+        setError(`File has ${codes.length} codes, but the ${rows}×${cols} grid only holds ${rows * cols}. Increase rows/cols or trim the file.`)
+        return
+      }
+      const resp = await generate(rows, cols, padding, cutSettingsPayload(), codes)
+      setSheet(resp)
+      setStatus(`Loaded ${resp.codes.length} code${resp.codes.length === 1 ? '' : 's'} from ${file.name}.`)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Failed to load codes')
     } finally {
       setBusy(false)
     }
@@ -421,6 +465,14 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
             <input type="checkbox" checked={cutAirAssist} onChange={(e) => setCutAirAssist((e.target as HTMLInputElement).checked)} />
             Air Assist
           </label>
+        </div>
+
+        <div class="generate-tags-cutsettings-row">
+          <span class="generate-tags-cutsettings-label">Codes</span>
+          <input ref={fileInputRef} class="generate-tags-file-input" type="file" accept=".txt" disabled={busy} />
+          <button type="button" onClick={onLoadCodes} disabled={busy}>
+            Load Codes
+          </button>
         </div>
 
         <div class="generate-tags-cutsettings-row generate-tags-cutsettings-actions">

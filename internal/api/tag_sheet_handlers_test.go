@@ -168,14 +168,38 @@ func TestGenerateTagSheetWithCodesReRendersWithoutRerolling(t *testing.T) {
 	}
 }
 
-func TestGenerateTagSheetRejectsMismatchedCodeCount(t *testing.T) {
+func TestGenerateTagSheetRejectsTooManyCodes(t *testing.T) {
 	fake := &gemini.Fake{}
 	h, cookies, _ := newTestServerWithGemini(t, fake)
 
-	req := tagSheetRequest{Rows: 1, Cols: 2, PaddingMm: 4, Codes: []string{"AAAA"}, CutSettings: validCutSettingsReq}
+	req := tagSheetRequest{Rows: 1, Cols: 2, PaddingMm: 4, Codes: []string{"AAAA", "BBBB", "CCCC"}, CutSettings: validCutSettingsReq}
 	w := doJSON(t, h, http.MethodPost, "/api/tags/sheet", req, cookies)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+// TestGenerateTagSheetAllowsFewerCodesThanGrid covers the "Load Codes"
+// flow: an operator-supplied .txt list shorter than rows*cols should render
+// one tag per code, not error or get padded out to fill the grid.
+func TestGenerateTagSheetAllowsFewerCodesThanGrid(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies, _ := newTestServerWithGemini(t, fake)
+
+	req := tagSheetRequest{Rows: 2, Cols: 2, PaddingMm: 4, Codes: []string{"AAAA", "BBBB", "CCCC"}, CutSettings: validCutSettingsReq}
+	w := doJSON(t, h, http.MethodPost, "/api/tags/sheet", req, cookies)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var resp tagSheetResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Codes) != 3 {
+		t.Fatalf("got %d codes, want 3", len(resp.Codes))
+	}
+	if !strings.Contains(resp.SVG, "<svg") {
+		t.Error("SVG response does not look like an SVG document")
 	}
 }
 

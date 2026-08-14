@@ -59,11 +59,13 @@ type tagSheetRequest struct {
 	Rows      int     `json:"rows"`
 	Cols      int     `json:"cols"`
 	PaddingMm float64 `json:"padding_mm"`
-	// Codes, if set, re-renders exactly this batch (already vetted by an
-	// earlier call to this same endpoint) instead of drawing a fresh one —
-	// how the UI updates the downloadable .lbrn2 after a cut-settings-only
-	// tweak without rerolling the previewed codes out from under the
-	// operator.
+	// Codes, if set, renders exactly this batch instead of drawing a fresh
+	// one — either an already-vetted batch from an earlier call to this
+	// same endpoint (how the UI updates the downloadable .lbrn2 after a
+	// cut-settings-only tweak without rerolling the previewed codes out
+	// from under the operator), or an operator-supplied list loaded from a
+	// .txt file. May be shorter than Rows*Cols — the grid renders one tag
+	// per code and leaves the remaining cells blank — but not longer.
 	Codes       []string                   `json:"codes,omitempty"`
 	CutSettings tagSheetCutSettingsRequest `json:"cut_settings"`
 }
@@ -121,12 +123,13 @@ func normalizeCodes(codes []string, pattern *regexp.Regexp) (normalized, invalid
 // generateTagSheet is the preview endpoint. With no req.Codes, it draws
 // rows*cols fresh codes guaranteed not to collide with anything known(ctx)
 // already returns (registered tags plus tags already in use by an
-// item/location); with req.Codes set, it re-renders that exact
-// already-vetted batch instead (a cut-settings-only tweak shouldn't reroll
-// the codes an operator is already looking at). Either way it lays the
-// result out and returns both export formats — nothing is persisted here,
-// registration only happens when the operator actually downloads, via
-// registerTagSheet.
+// item/location); with req.Codes set, it renders that exact batch instead —
+// at most rows*cols of them, one tag per code, any remaining grid cells left
+// blank — rather than rerolling (a cut-settings-only tweak, or an
+// operator-supplied .txt of codes, shouldn't reroll the codes an operator is
+// already looking at). Either way it lays the result out and returns both
+// export formats — nothing is persisted here, registration only happens
+// when the operator actually downloads, via registerTagSheet.
 func (s *Server) generateTagSheet(w http.ResponseWriter, r *http.Request, kind tagsheet.Kind, letters int, prefix string, pattern *regexp.Regexp, known func(context.Context) ([]string, error)) {
 	var req tagSheetRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -154,8 +157,8 @@ func (s *Server) generateTagSheet(w http.ResponseWriter, r *http.Request, kind t
 
 	var codes []string
 	if len(req.Codes) > 0 {
-		if len(req.Codes) != req.Rows*req.Cols {
-			writeError(w, http.StatusBadRequest, "codes must contain exactly rows*cols entries")
+		if len(req.Codes) > req.Rows*req.Cols {
+			writeError(w, http.StatusBadRequest, "codes must not contain more than rows*cols entries")
 			return
 		}
 		normalized, invalid := normalizeCodes(req.Codes, pattern)

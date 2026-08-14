@@ -27,7 +27,7 @@ export function App() {
       <Search path="/" />
       <Search path="/search" default />
       <Capture path="/capture" />
-      <Settings path="/settings" />
+      <Settings path="/settings/:section?" />
       <ItemDetail path="/items/:id" />
       <LocationView path="/locations" />
       <Duplicates path="/duplicates" />

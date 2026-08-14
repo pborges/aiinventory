@@ -33,9 +33,33 @@ func TestLayoutSheetDimensionsAndGrid(t *testing.T) {
 	}
 }
 
-func TestLayoutRejectsCodeCountMismatch(t *testing.T) {
-	if _, err := Layout(KindAsset, []string{"AAAA"}, 2, 2, 4); err == nil {
-		t.Fatal("expected an error when len(codes) != rows*cols")
+func TestLayoutRejectsTooManyCodes(t *testing.T) {
+	if _, err := Layout(KindAsset, []string{"AAAA", "BBBB", "CCCC", "DDDD", "EEEE"}, 2, 2, 4); err == nil {
+		t.Fatal("expected an error when len(codes) > rows*cols")
+	}
+}
+
+func TestLayoutAllowsFewerCodesThanGrid(t *testing.T) {
+	sheet, err := Layout(KindAsset, []string{"AAAA", "BBBB", "CCCC"}, 2, 2, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sheet.Tags) != 3 {
+		t.Fatalf("got %d tags, want 3 (one per code, not padded to rows*cols)", len(sheet.Tags))
+	}
+	// The sheet keeps its full 2x2 footprint even though the last cell is blank.
+	wantWidth := float64(2)*TagWidthMm + 1*4 + 2*4
+	wantHeight := float64(2)*TagHeightMm + 1*4 + 2*4
+	if !approxEqual(sheet.WidthMm, wantWidth, 1e-9) {
+		t.Errorf("WidthMm = %v, want %v", sheet.WidthMm, wantWidth)
+	}
+	if !approxEqual(sheet.HeightMm, wantHeight, 1e-9) {
+		t.Errorf("HeightMm = %v, want %v", sheet.HeightMm, wantHeight)
+	}
+	// Row-major: the 3rd code lands at row 1, col 0 (0-indexed).
+	tag2 := sheet.Tags[2]
+	if !approxEqual(tag2.X, 4, 1e-9) || !approxEqual(tag2.Y, 34, 1e-9) {
+		t.Errorf("tag[2] origin = (%v, %v), want (4, 34)", tag2.X, tag2.Y)
 	}
 }
 
