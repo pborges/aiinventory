@@ -2053,6 +2053,16 @@ button.label-chip:hover {
   opacity: 0.7;
 }
 
+.settings-registry-group-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.settings-registry-group-count {
+  opacity: 0.6;
+  font-weight: normal;
+}
+
 .settings-registry-row {
   display: flex;
   align-items: center;

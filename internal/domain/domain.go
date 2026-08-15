@@ -42,6 +42,9 @@ type RegisteredAssetTag struct {
 	ID        int64
 	Tag       string
 	CreatedAt time.Time
+	// Assigned is true when this tag is currently in use by an item
+	// (items.asset_tag) — assigned tags can't be deleted from the registry.
+	Assigned bool
 }
 
 // RegisteredLocationTag mirrors RegisteredAssetTag for location tags.
@@ -49,6 +52,10 @@ type RegisteredLocationTag struct {
 	ID          int64
 	LocationTag string
 	CreatedAt   time.Time
+	// Assigned is true when this tag is currently in use by a location
+	// (locations.location_tag) — assigned tags can't be deleted from the
+	// registry.
+	Assigned bool
 }
 
 type Image struct {

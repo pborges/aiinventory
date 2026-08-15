@@ -121,12 +121,16 @@ func (s *Store) GetRegisteredAssetTagByTag(ctx context.Context, tag string) (dom
 	return row, nil
 }
 
-// ListRegisteredAssetTagRows returns every registry entry with its id and
-// created_at — the Settings registry section's list view, as opposed to
-// ListRegisteredAssetTags' tag-only shape that tag resolution actually
-// needs.
+// ListRegisteredAssetTagRows returns every registry entry with its id,
+// created_at, and whether it's currently assigned to an item — the Settings
+// registry section's list view, as opposed to ListRegisteredAssetTags'
+// tag-only shape that tag resolution actually needs.
 func (s *Store) ListRegisteredAssetTagRows(ctx context.Context) ([]domain.RegisteredAssetTag, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, asset_tag, created_at FROM registered_asset_tags ORDER BY asset_tag`)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT rat.id, rat.asset_tag, rat.created_at,
+		       EXISTS(SELECT 1 FROM items i WHERE i.asset_tag = rat.asset_tag)
+		FROM registered_asset_tags rat
+		ORDER BY rat.asset_tag`)
 	if err != nil {
 		return nil, fmt.Errorf("list registered asset tag rows: %w", err)
 	}
@@ -136,7 +140,7 @@ func (s *Store) ListRegisteredAssetTagRows(ctx context.Context) ([]domain.Regist
 	for rows.Next() {
 		var row domain.RegisteredAssetTag
 		var createdAt string
-		if err := rows.Scan(&row.ID, &row.Tag, &createdAt); err != nil {
+		if err := rows.Scan(&row.ID, &row.Tag, &createdAt, &row.Assigned); err != nil {
 			return nil, fmt.Errorf("scan registered asset tag row: %w", err)
 		}
 		row.CreatedAt, _ = time.Parse(time.DateTime, createdAt)

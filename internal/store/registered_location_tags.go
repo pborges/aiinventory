@@ -121,12 +121,17 @@ func (s *Store) GetRegisteredLocationTagByTag(ctx context.Context, tag string) (
 	return row, nil
 }
 
-// ListRegisteredLocationTagRows returns every registry entry with its id
-// and created_at — the Settings registry section's list view, as opposed to
+// ListRegisteredLocationTagRows returns every registry entry with its id,
+// created_at, and whether it's currently assigned to a location — the
+// Settings registry section's list view, as opposed to
 // ListRegisteredLocationTags' tag-only shape that tag resolution actually
 // needs.
 func (s *Store) ListRegisteredLocationTagRows(ctx context.Context) ([]domain.RegisteredLocationTag, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, location_tag, created_at FROM registered_location_tags ORDER BY location_tag`)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT rlt.id, rlt.location_tag, rlt.created_at,
+		       EXISTS(SELECT 1 FROM locations l WHERE l.location_tag = rlt.location_tag)
+		FROM registered_location_tags rlt
+		ORDER BY rlt.location_tag`)
 	if err != nil {
 		return nil, fmt.Errorf("list registered location tag rows: %w", err)
 	}
@@ -136,7 +141,7 @@ func (s *Store) ListRegisteredLocationTagRows(ctx context.Context) ([]domain.Reg
 	for rows.Next() {
 		var row domain.RegisteredLocationTag
 		var createdAt string
-		if err := rows.Scan(&row.ID, &row.LocationTag, &createdAt); err != nil {
+		if err := rows.Scan(&row.ID, &row.LocationTag, &createdAt, &row.Assigned); err != nil {
 			return nil, fmt.Errorf("scan registered location tag row: %w", err)
 		}
 		row.CreatedAt, _ = time.Parse(time.DateTime, createdAt)

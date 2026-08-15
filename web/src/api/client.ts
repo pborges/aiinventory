@@ -234,6 +234,9 @@ export interface RegisteredTagEntry {
   id: number
   tag: string
   created_at: string
+  // Whether this tag is currently in use by an item/location — assigned
+  // entries can't be deleted from the registry.
+  assigned: boolean
 }
 
 export interface UploadRegisteredTagsResponse {

@@ -22,9 +22,13 @@ interface Props {
  * no edit — for one tag allow-list, backing the deterministic OCR-correction
  * system in internal/inventory.ResolveTag. Settings uses this for both the
  * asset-tag and location-tag registries, which are otherwise identical UIs
- * over two separate tables. Delete is immediate/non-confirming, same as
- * ItemDetail's per-photo delete — a registry entry's blast radius is just
- * its own membership row, trivially reversible by re-adding it. */
+ * over two separate tables. The list splits into Assigned (tag is in use by
+ * an item/location) and Unassigned sections; only unassigned entries get a
+ * delete button, since removing an in-use tag from the registry would strand
+ * the item/location that already carries it. Delete is otherwise immediate/
+ * non-confirming, same as ItemDetail's per-photo delete — a registry entry's
+ * blast radius is just its own membership row, trivially reversible by
+ * re-adding it. */
 export function RegisteredTagsSection({ title, pattern, placeholder, list, create, remove, upload, refreshKey }: Props) {
   const [tags, setTags] = useState<RegisteredTagEntry[] | null>(null)
   const [newTag, setNewTag] = useState('')
@@ -32,6 +36,9 @@ export function RegisteredTagsSection({ title, pattern, placeholder, list, creat
   const [busy, setBusy] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const assigned = tags?.filter((t) => t.assigned) ?? []
+  const unassigned = tags?.filter((t) => !t.assigned) ?? []
 
   useEffect(() => {
     load()
@@ -115,25 +122,46 @@ export function RegisteredTagsSection({ title, pattern, placeholder, list, creat
       {uploadStatus && <p class="settings-status">{uploadStatus}</p>}
       {error && <p class="settings-status settings-status-error">{error}</p>}
 
-      <ul class="settings-registry-list">
-        {tags === null && <li>Loading…</li>}
-        {tags?.length === 0 && <li class="settings-registry-empty">No tags registered yet.</li>}
-        {tags?.map((entry) => (
-          <li class="settings-registry-row" key={entry.id}>
-            <span class="settings-registry-tag">{entry.tag}</span>
-            <button
-              type="button"
-              class="settings-registry-delete"
-              onClick={() => onDelete(entry)}
-              disabled={busy}
-              aria-label={`Delete ${entry.tag}`}
-              title={`Delete ${entry.tag}`}
-            >
-              <Icon icon={faTrashCan} />
-            </button>
-          </li>
-        ))}
-      </ul>
+      {tags === null && <p>Loading…</p>}
+      {tags?.length === 0 && <p class="settings-registry-empty">No tags registered yet.</p>}
+
+      {tags !== null && tags.length > 0 && (
+        <>
+          <h3 class="settings-registry-group-title">
+            Assigned <span class="settings-registry-group-count">({assigned.length})</span>
+          </h3>
+          <ul class="settings-registry-list">
+            {assigned.length === 0 && <li class="settings-registry-empty">None.</li>}
+            {assigned.map((entry) => (
+              <li class="settings-registry-row" key={entry.id}>
+                <span class="settings-registry-tag">{entry.tag}</span>
+              </li>
+            ))}
+          </ul>
+
+          <h3 class="settings-registry-group-title">
+            Unassigned <span class="settings-registry-group-count">({unassigned.length})</span>
+          </h3>
+          <ul class="settings-registry-list">
+            {unassigned.length === 0 && <li class="settings-registry-empty">None.</li>}
+            {unassigned.map((entry) => (
+              <li class="settings-registry-row" key={entry.id}>
+                <span class="settings-registry-tag">{entry.tag}</span>
+                <button
+                  type="button"
+                  class="settings-registry-delete"
+                  onClick={() => onDelete(entry)}
+                  disabled={busy}
+                  aria-label={`Delete ${entry.tag}`}
+                  title={`Delete ${entry.tag}`}
+                >
+                  <Icon icon={faTrashCan} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   )
 }

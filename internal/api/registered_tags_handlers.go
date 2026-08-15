@@ -17,14 +17,18 @@ type registeredTagResponse struct {
 	ID        int64  `json:"id"`
 	Tag       string `json:"tag"`
 	CreatedAt string `json:"created_at"`
+	// Assigned is true when this tag is currently in use by an item/
+	// location — the registry list view groups on this and hides delete
+	// for assigned entries.
+	Assigned bool `json:"assigned"`
 }
 
 func toRegisteredAssetTagResponse(t domain.RegisteredAssetTag) registeredTagResponse {
-	return registeredTagResponse{ID: t.ID, Tag: t.Tag, CreatedAt: t.CreatedAt.Format(time.RFC3339)}
+	return registeredTagResponse{ID: t.ID, Tag: t.Tag, CreatedAt: t.CreatedAt.Format(time.RFC3339), Assigned: t.Assigned}
 }
 
 func toRegisteredLocationTagResponse(t domain.RegisteredLocationTag) registeredTagResponse {
-	return registeredTagResponse{ID: t.ID, Tag: t.LocationTag, CreatedAt: t.CreatedAt.Format(time.RFC3339)}
+	return registeredTagResponse{ID: t.ID, Tag: t.LocationTag, CreatedAt: t.CreatedAt.Format(time.RFC3339), Assigned: t.Assigned}
 }
 
 type registeredTagUploadResponse struct {
