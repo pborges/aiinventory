@@ -321,7 +321,10 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
           break
       }
       if (downloadCodesList) {
-        downloadText(`${guid}.txt`, sheet.codes.join('\n'), 'text/plain')
+        // Firing two programmatic downloads in the same tick trips Chrome's
+        // "multiple automatic downloads" guard, which silently drops one of
+        // them — staggering with a short delay keeps both.
+        setTimeout(() => downloadText(`${guid}.txt`, sheet.codes.join('\n'), 'text/plain'), 300)
         setStatus(`Downloaded ${formatLabel} and codes list.`)
       } else {
         setStatus(`Downloaded ${formatLabel}.`)
