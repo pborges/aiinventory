@@ -101,8 +101,7 @@ func (s *Server) saveTagSheetSettings(w http.ResponseWriter, r *http.Request, ke
 		return
 	}
 	var req tagSheetSettingsRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if !req.valid() {

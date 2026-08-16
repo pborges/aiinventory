@@ -37,8 +37,7 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 // validation as bootstrap/login (internal/api/auth_handlers.go).
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	var creds credentials
-	if err := decodeJSON(r, &creds); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &creds) {
 		return
 	}
 	if msg := creds.validate(); msg != "" {
@@ -78,8 +77,7 @@ func (s *Server) handleSetUserEnabled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req setUserEnabledRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 

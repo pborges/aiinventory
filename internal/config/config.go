@@ -17,6 +17,9 @@ type Config struct {
 	// location reconcile) into this directory for debugging OCR misreads.
 	// Empty disables saving entirely.
 	ScanStoreDir string
+	// TrustProxyHeaders enables client IP extraction from forwarding headers.
+	// It must only be used behind a trusted proxy that sanitizes those headers.
+	TrustProxyHeaders bool
 }
 
 func Load() Config {
@@ -24,11 +27,12 @@ func Load() Config {
 	flag.Parse()
 
 	return Config{
-		Port:          getEnv("PORT", "8080"),
-		DBPath:        getEnv("DB_PATH", "./aiinventory.db"),
-		TLSEnabled:    getEnvBool("TLS_ENABLED", false),
-		SessionSecret: os.Getenv("SESSION_SECRET"),
-		ScanStoreDir:  *storeDir,
+		Port:              getEnv("PORT", "8080"),
+		DBPath:            getEnv("DB_PATH", "./aiinventory.db"),
+		TLSEnabled:        getEnvBool("TLS_ENABLED", false),
+		SessionSecret:     os.Getenv("SESSION_SECRET"),
+		ScanStoreDir:      *storeDir,
+		TrustProxyHeaders: getEnvBool("TRUST_PROXY_HEADERS", false),
 	}
 }
 

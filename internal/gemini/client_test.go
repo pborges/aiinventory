@@ -54,3 +54,16 @@ func TestParseJSONResponseEmptyGroups(t *testing.T) {
 		t.Errorf("got %+v, want empty groups", out)
 	}
 }
+
+func TestGenerationConfigGatesLegacySamplingByModel(t *testing.T) {
+	legacy := generationConfig("gemini-2.5-flash", nil)
+	if legacy.Temperature == nil || *legacy.Temperature != 0 || legacy.TopK == nil || *legacy.TopK != 1 {
+		t.Fatalf("legacy config did not include deterministic sampling: %+v", legacy)
+	}
+	for _, model := range []string{"gemini-3.6-flash", "gemini-flash-latest", "custom-model"} {
+		config := generationConfig(model, nil)
+		if config.Temperature != nil || config.TopK != nil {
+			t.Fatalf("modern/unknown model %q received legacy sampling: %+v", model, config)
+		}
+	}
+}

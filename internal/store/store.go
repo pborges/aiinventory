@@ -15,6 +15,10 @@ type Store struct {
 	db *sql.DB
 }
 
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
 // Open opens (creating if necessary) the SQLite database at path, applies
 // pragmas suited to a single-process embedded app, and runs any pending
 // migrations.

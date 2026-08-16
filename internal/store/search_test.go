@@ -130,6 +130,18 @@ func TestSearchItemsFullText(t *testing.T) {
 		}
 	})
 
+	t.Run("treats punctuation and operators as literal free text", func(t *testing.T) {
+		for _, query := range []string{"XR-500", `XR-500 AND`, `"`, "-", "S/N"} {
+			results, err := s.SearchItems(ctx, SearchParams{Query: query})
+			if err != nil {
+				t.Fatalf("SearchItems(%q): %v", query, err)
+			}
+			if query == "XR-500" && (len(results) != 1 || results[0].AssetTag != "ZKEI") {
+				t.Fatalf("SearchItems(%q) = %+v, want [ZKEI]", query, results)
+			}
+		}
+	})
+
 	_ = unrelated
 }
 

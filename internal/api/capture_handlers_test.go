@@ -4,15 +4,22 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/pborges/aiinventory/internal/auth"
 	"github.com/pborges/aiinventory/internal/gemini"
 	"github.com/pborges/aiinventory/internal/store"
 )
+
+var testCaptureID atomic.Uint64
 
 func newTestServerWithGemini(t *testing.T, g gemini.Client) (http.Handler, []*http.Cookie, *store.Store) {
 	t.Helper()
@@ -50,7 +57,12 @@ func doCaptureUpload(t *testing.T, h http.Handler, cookies []*http.Cookie, image
 	return doMultipartUpload(t, h, "/api/capture/apply", cookies, imageBytes, map[string]string{
 		"asset_tag":   assetTag,
 		"description": preview.ImageDescription,
+		"capture_id":  nextTestCaptureID(),
 	})
+}
+
+func nextTestCaptureID() string {
+	return fmt.Sprintf("00000000-0000-4000-8000-%012x", testCaptureID.Add(1))
 }
 
 // registerTestTag registers tag in the tag registry directly against the
@@ -74,6 +86,40 @@ func registerTestLocationTag(t *testing.T, s *store.Store, tag string) {
 }
 
 func doMultipartUpload(t *testing.T, h http.Handler, path string, cookies []*http.Cookie, imageBytes []byte, fields map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	if path == "/api/capture/apply" {
+		copyFields := make(map[string]string, len(fields)+1)
+		for key, value := range fields {
+			copyFields[key] = value
+		}
+		if copyFields["capture_id"] == "" {
+			copyFields["capture_id"] = nextTestCaptureID()
+		}
+		fields = copyFields
+	}
+	return doRawMultipartUpload(t, h, path, cookies, makeTestJPEG(t, imageBytes), fields)
+}
+
+func makeTestJPEG(t *testing.T, seed []byte) []byte {
+	t.Helper()
+	v := uint8(127)
+	if len(seed) > 0 {
+		v = seed[0]
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	for y := 0; y < 2; y++ {
+		for x := 0; x < 2; x++ {
+			img.Set(x, y, color.RGBA{R: v, G: uint8(x * 80), B: uint8(y * 80), A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatalf("encode test jpeg: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func doRawMultipartUpload(t *testing.T, h http.Handler, path string, cookies []*http.Cookie, imageBytes []byte, fields map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -106,6 +152,47 @@ func TestCapturePreviewWithoutGeminiConfigured(t *testing.T) {
 	w := doMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("fake-jpeg"), nil)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", w.Code)
+	}
+}
+
+func TestCapturePreviewRejectsInvalidImage(t *testing.T) {
+	fake := &gemini.Fake{}
+	h, cookies, _ := newTestServerWithGemini(t, fake)
+	w := doRawMultipartUpload(t, h, "/api/capture/preview", cookies, []byte("not an image"), nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s; want 400", w.Code, w.Body.String())
+	}
+}
+
+func TestCaptureApplyIdempotencyKey(t *testing.T) {
+	h, cookies, s := newTestServerWithGemini(t, &gemini.Fake{})
+	fields := map[string]string{
+		"asset_tag":   "ZKEI",
+		"description": "serial 123",
+		"capture_id":  "d8ef8cd4-9f35-4df4-8e7b-2504c95dc6f0",
+	}
+	first := doMultipartUpload(t, h, "/api/capture/apply", cookies, []byte("photo"), fields)
+	second := doMultipartUpload(t, h, "/api/capture/apply", cookies, []byte("photo"), fields)
+	if first.Code != http.StatusOK || second.Code != http.StatusOK {
+		t.Fatalf("capture statuses = %d, %d; bodies = %s / %s", first.Code, second.Code, first.Body.String(), second.Body.String())
+	}
+	items, err := s.SearchItems(t.Context(), store.SearchParams{})
+	if err != nil || len(items) != 1 {
+		t.Fatalf("items = %+v, %v; want one", items, err)
+	}
+	images, err := s.ListImagesByItem(t.Context(), items[0].ID)
+	if err != nil || len(images) != 1 {
+		t.Fatalf("images = %+v, %v; want one", images, err)
+	}
+}
+
+func TestCaptureApplyRequiresIdempotencyKey(t *testing.T) {
+	h, cookies, _ := newTestServerWithGemini(t, nil)
+	w := doRawMultipartUpload(t, h, "/api/capture/apply", cookies, makeTestJPEG(t, []byte("photo")), map[string]string{
+		"asset_tag": "ZKEI",
+	})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s; want 400", w.Code, w.Body.String())
 	}
 }
 

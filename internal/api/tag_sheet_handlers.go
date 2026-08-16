@@ -132,8 +132,7 @@ func normalizeCodes(codes []string, pattern *regexp.Regexp) (normalized, invalid
 // when the operator actually downloads, via registerTagSheet.
 func (s *Server) generateTagSheet(w http.ResponseWriter, r *http.Request, kind tagsheet.Kind, letters int, prefix string, pattern *regexp.Regexp, known func(context.Context) ([]string, error)) {
 	var req tagSheetRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if req.Rows < 1 || req.Rows > tagSheetMaxRows {
@@ -216,8 +215,7 @@ func (s *Server) generateTagSheet(w http.ResponseWriter, r *http.Request, kind t
 // from passing through generateTagSheet's shape guarantees.
 func (s *Server) registerTagSheet(w http.ResponseWriter, r *http.Request, pattern *regexp.Regexp, bulkRegister func(context.Context, []string) (added, skipped int, err error)) {
 	var req tagSheetRegisterRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if len(req.Codes) < 1 || len(req.Codes) > tagSheetMaxCodes {

@@ -48,8 +48,7 @@ func (s *Server) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 	var creds credentials
-	if err := decodeJSON(r, &creds); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &creds) {
 		return
 	}
 	if msg := creds.validate(); msg != "" {
@@ -85,8 +84,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var creds credentials
-	if err := decodeJSON(r, &creds); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &creds) {
 		return
 	}
 

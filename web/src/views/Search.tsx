@@ -44,8 +44,12 @@ export function Search(_props: RouteProps) {
   const [generateModalItems, setGenerateModalItems] = useState<ItemSummary[] | null>(null)
   const { preview: hoverPreview, showHoverPreview, hideHoverPreview } = useHoverPreview()
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchAbortRef = useRef<AbortController | null>(null)
 
   function runSearch() {
+    searchAbortRef.current?.abort()
+    const controller = new AbortController()
+    searchAbortRef.current = controller
     setLoading(true)
     setError(null)
     api
@@ -57,18 +61,39 @@ export function Search(_props: RouteProps) {
         locationId: locationFilter?.id,
         labelIds: selectedLabelIds.size > 0 ? [...selectedLabelIds] : undefined,
         locationLabelIds: selectedLocationLabelIds.size > 0 ? [...selectedLocationLabelIds] : undefined,
-      })
+      }, controller.signal)
       .then((res) => {
+        if (searchAbortRef.current !== controller) return
         setItems(res.items)
         setSelected(new Set())
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Search failed'))
-      .finally(() => setLoading(false))
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        if (searchAbortRef.current === controller) setError(err instanceof ApiError ? err.message : 'Search failed')
+      })
+      .finally(() => {
+        if (searchAbortRef.current === controller) setLoading(false)
+      })
   }
 
   useEffect(() => {
     api.listItemLabels().then((res) => setAllLabels(res.labels))
     api.listLocationLabels().then((res) => setAllLocationLabels(res.labels))
+    api.descriptionBatchStatus()
+      .then((status) => {
+        if (!status.running) return
+        setGenerateModalItems(
+          status.items.map((item) => ({
+            id: item.item_id,
+            asset_tag: item.asset_tag,
+            description: item.description ?? '',
+            primary_image_id: item.primary_image_id,
+            labels: [],
+          })),
+        )
+      })
+      .catch(() => {})
+    return () => searchAbortRef.current?.abort()
   }, [])
 
   useEffect(() => {

@@ -7,10 +7,8 @@ package inventory
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/pborges/aiinventory/internal/domain"
-	"github.com/pborges/aiinventory/internal/store"
 )
 
 // ErrNoAssetTag is returned when a captured frame didn't contain a
@@ -18,18 +16,12 @@ import (
 var ErrNoAssetTag = errors.New("no asset tag found in frame")
 
 type CaptureStore interface {
-	GetItemByAssetTag(ctx context.Context, tag string) (domain.Item, error)
-	CreateItem(ctx context.Context, tag string) (domain.Item, error)
-	AddImage(ctx context.Context, itemID int64, data []byte, contentType, description string, createdBy int64) (domain.Image, error)
-	LogActivity(ctx context.Context, userID int64, action domain.ActivityAction, itemID, locationID *int64, detail string) error
-	RegisterAssetTag(ctx context.Context, tag string) error
-	UpdateItemDescription(ctx context.Context, id int64, description string) error
+	ApplyCapture(ctx context.Context, userID int64, captureID, assetTag string, data []byte, contentType, description string, setItemDescription bool) (domain.Item, bool, error)
 }
 
 type CaptureResult struct {
 	Item       domain.Item
 	ItemWasNew bool
-	Image      domain.Image
 }
 
 // Capture ingests one photo already analyzed by Gemini for the tag-capture
@@ -41,54 +33,13 @@ type CaptureResult struct {
 // setItemDescription additionally promotes that same text onto the item's
 // consolidated description, skipping the separate RegenerateDescription
 // call for the common case of a single clean read.
-func Capture(ctx context.Context, s CaptureStore, userID int64, hasAssetTag bool, assetTag string, imageData []byte, contentType, imageDescription string, setItemDescription bool) (CaptureResult, error) {
+func Capture(ctx context.Context, s CaptureStore, userID int64, captureID string, hasAssetTag bool, assetTag string, imageData []byte, contentType, imageDescription string, setItemDescription bool) (CaptureResult, error) {
 	if !hasAssetTag || assetTag == "" {
 		return CaptureResult{}, ErrNoAssetTag
 	}
-
-	item, err := s.GetItemByAssetTag(ctx, assetTag)
-	itemWasNew := false
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		item, err = s.CreateItem(ctx, assetTag)
-		if err != nil {
-			return CaptureResult{}, fmt.Errorf("create item: %w", err)
-		}
-		itemWasNew = true
-	case err != nil:
-		return CaptureResult{}, fmt.Errorf("look up item: %w", err)
-	}
-
-	// Self-heal the tag registry with whatever tag was actually accepted —
-	// an exact registry match, a confident auto-correction, or a manual
-	// operator override — so it's an exact match on every future scan
-	// regardless of how it got here.
-	if err := s.RegisterAssetTag(ctx, assetTag); err != nil {
-		return CaptureResult{}, fmt.Errorf("register tag: %w", err)
-	}
-
-	img, err := s.AddImage(ctx, item.ID, imageData, contentType, imageDescription, userID)
+	item, itemWasNew, err := s.ApplyCapture(ctx, userID, captureID, assetTag, imageData, contentType, imageDescription, setItemDescription)
 	if err != nil {
-		return CaptureResult{}, fmt.Errorf("add image: %w", err)
+		return CaptureResult{}, err
 	}
-
-	// Only promote a non-empty note — an unchecked/no-notes photo must never
-	// blank out an item description that a prior regenerate/edit/capture
-	// already set.
-	if setItemDescription && imageDescription != "" {
-		if err := s.UpdateItemDescription(ctx, item.ID, imageDescription); err != nil {
-			return CaptureResult{}, fmt.Errorf("update item description: %w", err)
-		}
-		item.Description = imageDescription
-	}
-
-	action := domain.ActivityImageAdded
-	if itemWasNew {
-		action = domain.ActivityItemCreated
-	}
-	if err := s.LogActivity(ctx, userID, action, &item.ID, nil, ""); err != nil {
-		return CaptureResult{}, fmt.Errorf("log activity: %w", err)
-	}
-
-	return CaptureResult{Item: item, ItemWasNew: itemWasNew, Image: img}, nil
+	return CaptureResult{Item: item, ItemWasNew: itemWasNew}, nil
 }

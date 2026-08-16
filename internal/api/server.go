@@ -5,6 +5,7 @@ package api
 import (
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/pborges/aiinventory/internal/auth"
 	"github.com/pborges/aiinventory/internal/gemini"
@@ -14,12 +15,23 @@ import (
 )
 
 type Server struct {
-	store           *store.Store
-	codec           *auth.Codec
-	geminiMu        sync.RWMutex
-	gemini          gemini.Client // nil if no Gemini API key is configured (Settings) — AI-dependent routes handle that
-	duplicateRunner *inventory.Runner
-	scanStoreDir    string // empty disables saving scan images — see saveScan
+	store              *store.Store
+	codec              *auth.Codec
+	geminiMu           sync.RWMutex
+	gemini             gemini.Client // nil if no Gemini API key is configured (Settings) — AI-dependent routes handle that
+	duplicateRunner    *inventory.Runner
+	descriptionBatches *descriptionBatchManager
+	scanStoreDir       string // empty disables saving scan images — see saveScan
+	authLimiter        *rateLimiter
+	aiLimiter          *rateLimiter
+	trustProxyHeaders  bool
+}
+
+type Options struct {
+	// TrustProxyHeaders allows X-Forwarded-For/X-Real-IP to identify clients
+	// for rate limiting. Enable it only when a trusted reverse proxy strips
+	// incoming values and supplies its own headers.
+	TrustProxyHeaders bool
 }
 
 // New assembles the HTTP handler. geminiClient may be nil if no Gemini API
@@ -29,12 +41,20 @@ type Server struct {
 // for a new client at runtime — see setGeminiClient. scanStoreDir may be
 // empty (the common case) to disable saving scan images entirely.
 func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStoreDir string) http.Handler {
+	return NewWithOptions(s, codec, geminiClient, scanStoreDir, Options{})
+}
+
+func NewWithOptions(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStoreDir string, options Options) http.Handler {
 	srv := &Server{
-		store:           s,
-		codec:           codec,
-		gemini:          geminiClient,
-		duplicateRunner: &inventory.Runner{},
-		scanStoreDir:    scanStoreDir,
+		store:              s,
+		codec:              codec,
+		gemini:             geminiClient,
+		duplicateRunner:    &inventory.Runner{},
+		descriptionBatches: newDescriptionBatchManager(),
+		scanStoreDir:       scanStoreDir,
+		authLimiter:        newRateLimiter(10, time.Minute),
+		aiLimiter:          newRateLimiter(60, time.Minute),
+		trustProxyHeaders:  options.TrustProxyHeaders,
 	}
 
 	mux := http.NewServeMux()
@@ -42,29 +62,31 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStor
 	mux.HandleFunc("GET /api/version", srv.handleVersion)
 
 	mux.HandleFunc("GET /api/auth/bootstrap", srv.handleBootstrapStatus)
-	mux.HandleFunc("POST /api/auth/bootstrap", srv.handleBootstrap)
-	mux.HandleFunc("POST /api/auth/login", srv.handleLogin)
+	mux.HandleFunc("POST /api/auth/bootstrap", srv.rateLimit(srv.authLimiter, srv.handleBootstrap))
+	mux.HandleFunc("POST /api/auth/login", srv.rateLimit(srv.authLimiter, srv.handleLogin))
 	mux.HandleFunc("POST /api/auth/logout", srv.handleLogout)
 	mux.Handle("GET /api/auth/me", srv.requireAuth(srv.handleMe))
 
 	mux.Handle("GET /api/settings", srv.requireAuth(srv.handleGetSettings))
 	mux.Handle("PUT /api/settings", srv.requireAuth(srv.handleUpdateSettings))
 
-	mux.Handle("POST /api/capture/preview", srv.requireAuth(srv.handleCapturePreview))
+	mux.Handle("POST /api/capture/preview", srv.requireAuth(srv.rateLimit(srv.aiLimiter, srv.handleCapturePreview)))
 	mux.Handle("POST /api/capture/apply", srv.requireAuth(srv.handleCaptureApply))
 
-	mux.Handle("POST /api/reconcile/preview", srv.requireAuth(srv.handleReconcilePreview))
+	mux.Handle("POST /api/reconcile/preview", srv.requireAuth(srv.rateLimit(srv.aiLimiter, srv.handleReconcilePreview)))
 	mux.Handle("POST /api/reconcile/diff", srv.requireAuth(srv.handleReconcileDiff))
 	mux.Handle("POST /api/reconcile/apply", srv.requireAuth(srv.handleReconcileApply))
 
 	mux.Handle("GET /api/search", srv.requireAuth(srv.handleSearch))
 	mux.Handle("POST /api/items/bulk-delete", srv.requireAuth(srv.handleBulkDelete))
+	mux.Handle("GET /api/descriptions/batch/status", srv.requireAuth(srv.handleDescriptionBatchStatus))
+	mux.Handle("POST /api/descriptions/batch", srv.requireAuth(srv.handleStartDescriptionBatch))
 
 	mux.Handle("GET /api/images/{id}", srv.requireAuth(srv.handleGetImage))
 
 	mux.Handle("GET /api/items/{id}", srv.requireAuth(srv.handleGetItem))
 	mux.Handle("PUT /api/items/{id}", srv.requireAuth(srv.handleUpdateItem))
-	mux.Handle("POST /api/items/{id}/regenerate-description", srv.requireAuth(srv.handleRegenerateItemDescription))
+	mux.Handle("POST /api/items/{id}/regenerate-description", srv.requireAuth(srv.rateLimit(srv.aiLimiter, srv.handleRegenerateItemDescription)))
 	mux.Handle("PUT /api/items/{id}/images/order", srv.requireAuth(srv.handleReorderImages))
 	mux.Handle("DELETE /api/items/{id}/images/{imageId}", srv.requireAuth(srv.handleDeleteImage))
 	mux.Handle("PUT /api/items/{id}/labels", srv.requireAuth(srv.handleSetItemLabels))
@@ -77,7 +99,7 @@ func New(s *store.Store, codec *auth.Codec, geminiClient gemini.Client, scanStor
 	mux.Handle("PUT /api/locations/{id}/labels", srv.requireAuth(srv.handleSetLocationLabels))
 
 	mux.Handle("GET /api/duplicates/status", srv.requireAuth(srv.handleDuplicatesStatus))
-	mux.Handle("POST /api/duplicates/run", srv.requireAuth(srv.handleStartDuplicateRun))
+	mux.Handle("POST /api/duplicates/run", srv.requireAuth(srv.rateLimit(srv.aiLimiter, srv.handleStartDuplicateRun)))
 	mux.Handle("GET /api/duplicates/groups", srv.requireAuth(srv.handleListDuplicateGroups))
 	mux.Handle("POST /api/duplicates/groups/{id}/dismiss", srv.requireAuth(srv.handleDismissDuplicateGroup))
 	mux.Handle("POST /api/duplicates/groups/{id}/merge", srv.requireAuth(srv.handleMergeDuplicateGroup))

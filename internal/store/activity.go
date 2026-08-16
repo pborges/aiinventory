@@ -9,8 +9,8 @@ import (
 	"github.com/pborges/aiinventory/internal/domain"
 )
 
-func (s *Store) LogActivity(ctx context.Context, userID int64, action domain.ActivityAction, itemID, locationID *int64, detail string) error {
-	_, err := s.db.ExecContext(ctx, `
+func logActivityTx(ctx context.Context, tx *sql.Tx, userID int64, action domain.ActivityAction, itemID, locationID *int64, detail string) error {
+	_, err := tx.ExecContext(ctx, `
 		INSERT INTO activity (user_id, action, item_id, location_id, detail) VALUES (?, ?, ?, ?, ?)`,
 		userID, string(action), itemID, locationID, detail)
 	if err != nil {

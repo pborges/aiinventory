@@ -41,6 +41,13 @@ func (f *fakeDescriptionStore) LogActivity(_ context.Context, userID int64, acti
 	return nil
 }
 
+func (f *fakeDescriptionStore) UpdateItemDescriptionWithActivity(ctx context.Context, userID, itemID int64, description string, action domain.ActivityAction) error {
+	if err := f.UpdateItemDescription(ctx, itemID, description); err != nil {
+		return err
+	}
+	return f.LogActivity(ctx, userID, action, &itemID, nil, "")
+}
+
 func TestRegenerateDescription(t *testing.T) {
 	f := &fakeDescriptionStore{
 		items: map[int64]domain.Item{1: {ID: 1, AssetTag: "ZKEI"}},

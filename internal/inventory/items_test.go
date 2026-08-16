@@ -36,6 +36,17 @@ func (f *fakeDeleteStore) LogActivity(_ context.Context, userID int64, action do
 	return nil
 }
 
+func (f *fakeDeleteStore) DeleteItemWithActivity(ctx context.Context, userID, itemID int64) error {
+	item, err := f.GetItemByID(ctx, itemID)
+	if err != nil {
+		return err
+	}
+	if err := f.LogActivity(ctx, userID, domain.ActivityItemDeleted, &itemID, nil, item.AssetTag); err != nil {
+		return err
+	}
+	return f.DeleteItem(ctx, itemID)
+}
+
 func TestDeleteItemLogsBeforeDeleting(t *testing.T) {
 	f := &fakeDeleteStore{items: map[int64]domain.Item{1: {ID: 1, AssetTag: "ZKEI"}}}
 

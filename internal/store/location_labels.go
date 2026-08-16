@@ -106,20 +106,16 @@ func (s *Store) DeleteLocationLabel(ctx context.Context, id int64) error {
 	return nil
 }
 
-// SetLocationLabels replaces locationID's full set of labels with labelIDs
-// (delete-then-insert in one transaction), mirroring SetItemLabels.
-func (s *Store) SetLocationLabels(ctx context.Context, locationID int64, labelIDs []int64) error {
-	return s.withTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM location_label_links WHERE location_id = ?`, locationID); err != nil {
-			return fmt.Errorf("clear location labels: %w", err)
+func replaceLocationLabelsTx(ctx context.Context, tx *sql.Tx, locationID int64, labelIDs []int64) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM location_label_links WHERE location_id = ?`, locationID); err != nil {
+		return fmt.Errorf("clear location labels: %w", err)
+	}
+	for _, labelID := range labelIDs {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO location_label_links (location_id, label_id) VALUES (?, ?)`, locationID, labelID); err != nil {
+			return fmt.Errorf("set location label %d: %w", labelID, err)
 		}
-		for _, labelID := range labelIDs {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO location_label_links (location_id, label_id) VALUES (?, ?)`, locationID, labelID); err != nil {
-				return fmt.Errorf("set location label %d: %w", labelID, err)
-			}
-		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // ListLabelsByLocation returns one location's labels, ordered by name.

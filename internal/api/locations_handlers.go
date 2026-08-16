@@ -61,8 +61,7 @@ func (s *Server) handleUpdateLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req updateLocationRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -108,17 +107,16 @@ func (s *Server) handleSetLocationLabels(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var req setLocationLabelsRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
 	ctx := r.Context()
-	if err := s.store.SetLocationLabels(ctx, id, req.LabelIDs); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if err := s.store.LogActivity(ctx, user.ID, domain.ActivityLocationLabelsUpdated, nil, &id, ""); err != nil {
+	if err := s.store.SetLocationLabelsWithActivity(ctx, user.ID, id, req.LabelIDs); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -217,8 +215,7 @@ func (s *Server) handleMoveItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req moveItemRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 

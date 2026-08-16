@@ -1,11 +1,11 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/pborges/aiinventory/internal/auth"
-	"github.com/pborges/aiinventory/internal/inventory"
 	"github.com/pborges/aiinventory/internal/store"
 )
 
@@ -87,19 +87,17 @@ func (s *Server) handleBulkDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req bulkItemIDsRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
-	ctx := r.Context()
-	deleted := 0
-	for _, id := range req.ItemIDs {
-		if err := inventory.DeleteItem(ctx, s.store, user.ID, id); err != nil {
-			writeError(w, http.StatusInternalServerError, "internal error")
+	if err := s.store.DeleteItemsWithActivity(r.Context(), user.ID, req.ItemIDs); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "one or more items were not found")
 			return
 		}
-		deleted++
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"deleted": deleted})
+	writeJSON(w, http.StatusOK, map[string]int{"deleted": len(req.ItemIDs)})
 }

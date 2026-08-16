@@ -133,13 +133,12 @@ func (s *Server) handleUpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req updateItemRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
 	ctx := r.Context()
-	if err := s.store.UpdateItemDescription(ctx, id, req.Description); err != nil {
+	if err := s.store.UpdateItemDescriptionWithActivity(ctx, user.ID, id, req.Description, domain.ActivityDescriptionEdited); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
 			return
@@ -147,11 +146,6 @@ func (s *Server) handleUpdateItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if err := s.store.LogActivity(ctx, user.ID, domain.ActivityDescriptionEdited, &id, nil, ""); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
 	s.handleGetItem(w, r)
 }
 
@@ -172,8 +166,7 @@ func (s *Server) handleReorderImages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req reorderImagesRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
@@ -205,7 +198,7 @@ func (s *Server) handleDeleteImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	if err := s.store.DeleteImage(ctx, itemID, imageID); err != nil {
+	if err := s.store.DeleteImageWithActivity(ctx, user.ID, itemID, imageID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
 			return
@@ -213,11 +206,6 @@ func (s *Server) handleDeleteImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if err := s.store.LogActivity(ctx, user.ID, domain.ActivityImageDeleted, &itemID, nil, ""); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
 	s.handleGetItem(w, r)
 }
 
@@ -233,7 +221,8 @@ type regenerateItemDescriptionRequest struct {
 // JSON body with a "hint" field to steer this specific run; an empty/absent
 // body means no hint.
 func (s *Server) handleRegenerateItemDescription(w http.ResponseWriter, r *http.Request) {
-	if s.geminiClient() == nil {
+	client := s.geminiClient()
+	if client == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (configure a Gemini API key in Settings)")
 		return
 	}
@@ -249,11 +238,8 @@ func (s *Server) handleRegenerateItemDescription(w http.ResponseWriter, r *http.
 	}
 
 	var req regenerateItemDescriptionRequest
-	if r.ContentLength != 0 {
-		if err := decodeJSON(r, &req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
-			return
-		}
+	if !decodeOptionalJSON(w, r, &req) {
+		return
 	}
 
 	ctx := r.Context()
@@ -263,7 +249,7 @@ func (s *Server) handleRegenerateItemDescription(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if _, err := inventory.RegenerateDescription(ctx, s.store, s.geminiClient(), user.ID, model, prompt, id, req.Hint); err != nil {
+	if _, err := inventory.RegenerateDescription(ctx, s.store, client, user.ID, model, prompt, id, req.Hint); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not found")
 			return

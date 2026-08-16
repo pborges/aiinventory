@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"regexp"
@@ -13,8 +14,13 @@ const maxUploadTextBytes = 1 << 20 // 1MB
 
 // readUploadedTextFile reads a "file" multipart field as raw bytes — the
 // registry bulk-upload's counterpart to readUploadedImage.
-func readUploadedTextFile(r *http.Request) ([]byte, error) {
+func readUploadedTextFile(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadTextBytes+maxMultipartOverheadBytes)
 	if err := r.ParseMultipartForm(maxUploadTextBytes); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return nil, errUploadTooLarge
+		}
 		return nil, err
 	}
 	file, _, err := r.FormFile("file")
@@ -23,7 +29,14 @@ func readUploadedTextFile(r *http.Request) ([]byte, error) {
 	}
 	defer file.Close()
 
-	return io.ReadAll(io.LimitReader(file, maxUploadTextBytes))
+	data, err := io.ReadAll(io.LimitReader(file, maxUploadTextBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxUploadTextBytes {
+		return nil, errUploadTooLarge
+	}
+	return data, nil
 }
 
 // parseTagLines splits data into non-blank, trimmed, uppercased lines and

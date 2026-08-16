@@ -1,7 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"image"
+	"image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
 	"regexp"
@@ -14,7 +19,16 @@ import (
 
 const maxUploadBytes = 10 << 20 // 10MB — captured frames are downsized client-side well below this
 
+const (
+	maxMultipartOverheadBytes = 1 << 20
+	maxImageDimension         = 4096
+	maxImagePixels            = 16 * 1024 * 1024
+)
+
+var errUploadTooLarge = errors.New("upload too large")
+
 var assetTagPattern = regexp.MustCompile(`^[A-Z]{4}$`)
+var captureIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 type captureResponse struct {
 	HasAssetTag      bool   `json:"has_asset_tag"`
@@ -53,26 +67,63 @@ type capturePreviewResponse struct {
 	ItemWillBeNew    bool     `json:"item_will_be_new,omitempty"`
 }
 
-func readUploadedImage(r *http.Request) (data []byte, contentType string, err error) {
+func readUploadedImage(w http.ResponseWriter, r *http.Request) (data []byte, contentType string, err error) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes+maxMultipartOverheadBytes)
 	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return nil, "", errUploadTooLarge
+		}
 		return nil, "", err
 	}
-	file, header, err := r.FormFile("image")
+	file, _, err := r.FormFile("image")
 	if err != nil {
 		return nil, "", err
 	}
 	defer file.Close()
 
-	data, err = io.ReadAll(io.LimitReader(file, maxUploadBytes))
+	raw, err := io.ReadAll(io.LimitReader(file, maxUploadBytes+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(raw) > maxUploadBytes {
+		return nil, "", errUploadTooLarge
+	}
+	if len(raw) == 0 {
+		return nil, "", fmt.Errorf("empty image")
+	}
+
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		return nil, "", err
+	}
+	if format != "jpeg" && format != "png" {
+		return nil, "", fmt.Errorf("unsupported image format %q", format)
+	}
+	if cfg.Width < 1 || cfg.Height < 1 || cfg.Width > maxImageDimension || cfg.Height > maxImageDimension || cfg.Width*cfg.Height > maxImagePixels {
+		return nil, "", fmt.Errorf("image dimensions exceed limits")
+	}
+	decoded, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {
 		return nil, "", err
 	}
 
-	contentType = header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "image/jpeg"
+	var canonical bytes.Buffer
+	if err := jpeg.Encode(&canonical, decoded, &jpeg.Options{Quality: 85}); err != nil {
+		return nil, "", err
 	}
-	return data, contentType, nil
+	if canonical.Len() > maxUploadBytes {
+		return nil, "", errUploadTooLarge
+	}
+	return canonical.Bytes(), "image/jpeg", nil
+}
+
+func writeImageUploadError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errUploadTooLarge) {
+		writeError(w, http.StatusRequestEntityTooLarge, "image upload too large")
+		return
+	}
+	writeError(w, http.StatusBadRequest, "invalid image upload")
 }
 
 // handleCapturePreview implements the read-only half of README flow #1: a
@@ -82,7 +133,8 @@ func readUploadedImage(r *http.Request) (data []byte, contentType string, err er
 // which calls handleCaptureApply with the same image plus the asset tag/
 // description this endpoint returned.
 func (s *Server) handleCapturePreview(w http.ResponseWriter, r *http.Request) {
-	if s.geminiClient() == nil {
+	client := s.geminiClient()
+	if client == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (GEMINI_API_KEY not configured)")
 		return
 	}
@@ -91,9 +143,9 @@ func (s *Server) handleCapturePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, contentType, err := readUploadedImage(r)
+	data, contentType, err := readUploadedImage(w, r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid image upload")
+		writeImageUploadError(w, err)
 		return
 	}
 
@@ -104,7 +156,7 @@ func (s *Server) handleCapturePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	analysis, err := s.geminiClient().AnalyzeTagCapture(ctx, model, prompt, data, contentType)
+	analysis, err := client.AnalyzeTagCapture(ctx, model, prompt, data, contentType)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "gemini request failed: "+err.Error())
 		return
@@ -178,9 +230,9 @@ func (s *Server) handleCaptureApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, contentType, err := readUploadedImage(r)
+	data, contentType, err := readUploadedImage(w, r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid image upload")
+		writeImageUploadError(w, err)
 		return
 	}
 
@@ -191,9 +243,14 @@ func (s *Server) handleCaptureApply(w http.ResponseWriter, r *http.Request) {
 	}
 	description := r.FormValue("description")
 	setItemDescription := r.FormValue("set_item_description") == "1"
+	captureID := r.FormValue("capture_id")
+	if !captureIDPattern.MatchString(captureID) {
+		writeError(w, http.StatusBadRequest, "capture_id is required and must be a UUID")
+		return
+	}
 
 	ctx := r.Context()
-	result, err := inventory.Capture(ctx, s.store, user.ID, true, assetTag, data, contentType, description, setItemDescription)
+	result, err := inventory.Capture(ctx, s.store, user.ID, captureID, true, assetTag, data, contentType, description, setItemDescription)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return

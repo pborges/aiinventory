@@ -98,3 +98,44 @@ func TestDeleteImageRejectsForeignImage(t *testing.T) {
 		t.Fatalf("image should not have been deleted: %+v", images)
 	}
 }
+
+func TestApplyCaptureIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	s := NewTestStore(t)
+	user, err := s.CreateFirstUser(ctx, "alice", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const captureID = "d8ef8cd4-9f35-4df4-8e7b-2504c95dc6f0"
+	item1, new1, err := s.ApplyCapture(ctx, user.ID, captureID, "ZKEI", []byte("photo"), "image/jpeg", "serial 123", true)
+	if err != nil {
+		t.Fatalf("first ApplyCapture: %v", err)
+	}
+	item2, new2, err := s.ApplyCapture(ctx, user.ID, captureID, "GKEI", []byte("different"), "image/jpeg", "different", false)
+	if err != nil {
+		t.Fatalf("replayed ApplyCapture: %v", err)
+	}
+	if !new1 || !new2 || item2.ID != item1.ID {
+		t.Fatalf("replay returned item/new = %d/%v, want %d/true", item2.ID, new2, item1.ID)
+	}
+	if item2.AssetTag != "ZKEI" || item2.Description != "serial 123" {
+		t.Fatalf("replay changed original item: %+v", item2)
+	}
+	images, err := s.ListImagesByItem(ctx, item1.ID)
+	if err != nil || len(images) != 1 {
+		t.Fatalf("images after replay = %+v, %v; want one", images, err)
+	}
+	activity, err := s.ListActivityForItem(ctx, item1.ID)
+	if err != nil || len(activity) != 1 {
+		t.Fatalf("activity after replay = %+v, %v; want one", activity, err)
+	}
+}
+
+func TestApplyCaptureRequiresCaptureID(t *testing.T) {
+	s := NewTestStore(t)
+	user, _ := s.CreateFirstUser(t.Context(), "alice", "hash")
+	if _, _, err := s.ApplyCapture(t.Context(), user.ID, "", "ZKEI", []byte("photo"), "image/jpeg", "", false); err == nil {
+		t.Fatal("ApplyCapture accepted an empty capture id")
+	}
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons'
 import { api, ApiError, formatLocationTag, type ActivityEntry, type Location, type LocationItem, type Label } from '../api/client'
 import { Header } from '../components/Header'
@@ -34,6 +34,7 @@ export function LocationView(_props: RouteProps) {
   const [labelsBusy, setLabelsBusy] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 800px)').matches)
   const { preview: hoverPreview, showHoverPreview, hideHoverPreview } = useHoverPreview()
+  const locationAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     api
@@ -48,22 +49,32 @@ export function LocationView(_props: RouteProps) {
         setLoading(false)
       })
     api.listLocationLabels().then((res) => setAllLocationLabels(res.labels))
+    return () => locationAbortRef.current?.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function selectLocation(loc: Location) {
+    locationAbortRef.current?.abort()
+    const controller = new AbortController()
+    locationAbortRef.current = controller
     setSelected(loc)
     setDescriptionInput(loc.description ?? '')
     setLoading(true)
     setError(null)
     if (!window.matchMedia('(min-width: 800px)').matches) setSidebarOpen(false)
-    Promise.all([api.getLocationItems(loc.id), api.getLocationActivity(loc.id)])
+    Promise.all([api.getLocationItems(loc.id, controller.signal), api.getLocationActivity(loc.id, controller.signal)])
       .then(([itemsRes, activityRes]) => {
+        if (locationAbortRef.current !== controller) return
         setItems(itemsRes.items)
         setActivity(activityRes.activity)
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load location'))
-      .finally(() => setLoading(false))
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        if (locationAbortRef.current === controller) setError(err instanceof ApiError ? err.message : 'Failed to load location')
+      })
+      .finally(() => {
+        if (locationAbortRef.current === controller) setLoading(false)
+      })
   }
 
   async function onSaveDescription() {

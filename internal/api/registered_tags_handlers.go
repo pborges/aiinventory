@@ -59,8 +59,7 @@ type registeredTagRequest struct {
 // registry from the Settings form — idempotent, same as the bulk upload.
 func (s *Server) handleCreateRegisteredAssetTag(w http.ResponseWriter, r *http.Request) {
 	var req registeredTagRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	tag := strings.ToUpper(strings.TrimSpace(req.Tag))
@@ -107,8 +106,12 @@ func (s *Server) handleDeleteRegisteredAssetTag(w http.ResponseWriter, r *http.R
 // line fails the shape check, the whole upload is rejected (naming the bad
 // lines) rather than partially importing a garbled file.
 func (s *Server) handleUploadRegisteredAssetTags(w http.ResponseWriter, r *http.Request) {
-	data, err := readUploadedTextFile(r)
+	data, err := readUploadedTextFile(w, r)
 	if err != nil {
+		if errors.Is(err, errUploadTooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "tag file too large")
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid file upload")
 		return
 	}
@@ -144,8 +147,7 @@ func (s *Server) handleListRegisteredLocationTags(w http.ResponseWriter, r *http
 // registry from the Settings form — idempotent, same as the bulk upload.
 func (s *Server) handleCreateRegisteredLocationTag(w http.ResponseWriter, r *http.Request) {
 	var req registeredTagRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	tag := strings.ToUpper(strings.TrimSpace(req.Tag))
@@ -191,8 +193,12 @@ func (s *Server) handleDeleteRegisteredLocationTag(w http.ResponseWriter, r *htt
 // line. If any line fails the shape check, the whole upload is rejected
 // (naming the bad lines) rather than partially importing a garbled file.
 func (s *Server) handleUploadRegisteredLocationTags(w http.ResponseWriter, r *http.Request) {
-	data, err := readUploadedTextFile(r)
+	data, err := readUploadedTextFile(w, r)
 	if err != nil {
+		if errors.Is(err, errUploadTooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, "tag file too large")
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid file upload")
 		return
 	}

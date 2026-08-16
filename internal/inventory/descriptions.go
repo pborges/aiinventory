@@ -11,8 +11,7 @@ import (
 type DescriptionStore interface {
 	GetItemByID(ctx context.Context, id int64) (domain.Item, error)
 	ListImageMetaByItem(ctx context.Context, itemID int64) ([]domain.Image, error)
-	UpdateItemDescription(ctx context.Context, id int64, description string) error
-	LogActivity(ctx context.Context, userID int64, action domain.ActivityAction, itemID, locationID *int64, detail string) error
+	UpdateItemDescriptionWithActivity(ctx context.Context, userID, itemID int64, description string, action domain.ActivityAction) error
 }
 
 // RegenerateDescription implements the Search view's bulk "Regenerate
@@ -43,11 +42,8 @@ func RegenerateDescription(ctx context.Context, s DescriptionStore, g gemini.Cli
 		return "", fmt.Errorf("gemini: %w", err)
 	}
 
-	if err := s.UpdateItemDescription(ctx, itemID, result.Description); err != nil {
+	if err := s.UpdateItemDescriptionWithActivity(ctx, userID, itemID, result.Description, domain.ActivityDescriptionRegenerated); err != nil {
 		return "", fmt.Errorf("update description: %w", err)
-	}
-	if err := s.LogActivity(ctx, userID, domain.ActivityDescriptionRegenerated, &itemID, nil, ""); err != nil {
-		return "", fmt.Errorf("log activity: %w", err)
 	}
 
 	return result.Description, nil

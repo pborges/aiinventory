@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/pborges/aiinventory/internal/api"
 	"github.com/pborges/aiinventory/internal/auth"
@@ -61,11 +62,22 @@ func main() {
 		log.Printf("saving scan images into %s", cfg.ScanStoreDir)
 	}
 
-	handler := api.New(db, codec, geminiClient, cfg.ScanStoreDir)
+	handler := api.NewWithOptions(db, codec, geminiClient, cfg.ScanStoreDir, api.Options{
+		TrustProxyHeaders: cfg.TrustProxyHeaders,
+	})
+	server := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       2 * time.Minute,
+		WriteTimeout:      6 * time.Minute, // duplicate scans have a 5-minute deadline
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    1 << 20,
+	}
 
 	if !cfg.TLSEnabled {
 		log.Printf("aiinventory listening on :%s", cfg.Port)
-		if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {
+		if err := server.ListenAndServe(); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -75,11 +87,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("prepare TLS certificate: %v", err)
 	}
-	server := &http.Server{
-		Addr:      ":" + cfg.Port,
-		Handler:   handler,
-		TLSConfig: &tls.Config{Certificates: []tls.Certificate{cert}},
-	}
+	server.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 	log.Printf("aiinventory listening on :%s (HTTPS, self-signed — browsers will warn until you accept the certificate)", cfg.Port)
 	if err := server.ListenAndServeTLS("", ""); err != nil {
 		log.Fatal(err)

@@ -42,6 +42,21 @@ func (f *fakeMoveItemStore) LogActivity(_ context.Context, userID int64, action 
 	return nil
 }
 
+func (f *fakeMoveItemStore) MoveItemToLocationWithActivity(ctx context.Context, userID, itemID, locationID int64) (domain.Item, error) {
+	item, err := f.GetItemByID(ctx, itemID)
+	if err != nil {
+		return domain.Item{}, err
+	}
+	if _, err := f.GetLocationByID(ctx, locationID); err != nil {
+		return domain.Item{}, err
+	}
+	if err := f.SetItemLocation(ctx, itemID, &locationID); err != nil {
+		return domain.Item{}, err
+	}
+	f.LogActivity(ctx, userID, domain.ActivityItemMoved, &itemID, &locationID, "")
+	return f.GetItemByID(ctx, item.ID)
+}
+
 func TestMoveItemToLocation(t *testing.T) {
 	oldLocID, newLocID := int64(1), int64(2)
 	f := &fakeMoveItemStore{

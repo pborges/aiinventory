@@ -66,6 +66,8 @@ function resolutionsByRaw(resolutionLists: (TagResolution[] | undefined)[]): Map
 export function Capture(_props: RouteProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const capturedBlobRef = useRef<Blob | null>(null)
+  const captureLockRef = useRef(false)
+  const captureIDRef = useRef<string | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [phase, setPhase] = useState<Phase>('live')
   const [mode, setMode] = useState<CaptureMode>('ingest')
@@ -145,6 +147,8 @@ export function Capture(_props: RouteProps) {
     setResolvedLocationTag('')
     setUseAsItemDescription(true)
     capturedBlobRef.current = null
+    captureLockRef.current = false
+    captureIDRef.current = null
     setPhase('live')
   }
 
@@ -215,15 +219,20 @@ export function Capture(_props: RouteProps) {
   }
 
   async function onCapture() {
-    if (!videoRef.current || phase !== 'live') return
+    if (!videoRef.current || phase !== 'live' || captureLockRef.current) return
 
-    const blob = await captureSquareFrame(videoRef.current)
-    capturedBlobRef.current = blob
-    setFrozenFrameUrl(URL.createObjectURL(blob))
-    setResult(null) // clear the previous cycle's confirmation once a new one starts
+    // State updates are asynchronous, so use a synchronous ref as the real
+    // double-tap guard and move out of the live phase before awaiting canvas
+    // capture. The UUID makes a retried accepted upload idempotent server-side.
+    captureLockRef.current = true
+    setResult(null)
     setPhase('analyzing')
 
     try {
+      captureIDRef.current = crypto.randomUUID()
+      const blob = await captureSquareFrame(videoRef.current)
+      capturedBlobRef.current = blob
+      setFrozenFrameUrl(URL.createObjectURL(blob))
       // Which flow runs is an explicit user choice (the mode toggle below
       // the viewfinder), not auto-detected — asset tags and location tags
       // can both be a handful of uppercase letters on a white sticker, and
@@ -352,10 +361,16 @@ export function Capture(_props: RouteProps) {
   }
 
   async function onAcceptCapture() {
-    if (!pendingCapture || !capturedBlobRef.current || !ASSET_TAG_PATTERN.test(resolvedTag)) return
+    if (!pendingCapture || !capturedBlobRef.current || !captureIDRef.current || !ASSET_TAG_PATTERN.test(resolvedTag)) return
     setPhase('committing')
     try {
-      await api.captureApply(capturedBlobRef.current, resolvedTag, pendingCapture.description, useAsItemDescription)
+      await api.captureApply(
+        capturedBlobRef.current,
+        resolvedTag,
+        pendingCapture.description,
+        useAsItemDescription,
+        captureIDRef.current,
+      )
       resetToLive() // saved successfully — clear everything and go straight back to a live, ready-to-shoot camera
     } catch (err) {
       setResult({ kind: 'error', message: err instanceof ApiError ? err.message : 'Save failed' })

@@ -133,15 +133,6 @@ func (s *Store) ListItemsByLocation(ctx context.Context, locationID int64) ([]do
 	return out, rows.Err()
 }
 
-func (s *Store) SetItemLocation(ctx context.Context, itemID int64, locationID *int64) error {
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE items SET location_id = ?, updated_at = datetime('now') WHERE id = ?`, locationID, itemID)
-	if err != nil {
-		return fmt.Errorf("set item location: %w", err)
-	}
-	return nil
-}
-
 // ApplyReconciliation atomically applies an already-computed diff (see
 // internal/inventory.ComputeReconciliation): creates an item for every
 // asset tag seen in the frame that never matched an existing item (linked

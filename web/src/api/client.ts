@@ -39,12 +39,13 @@ async function parseBody<T>(res: Response): Promise<T> {
   return (text ? JSON.parse(text) : undefined) as T
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(path, {
     method,
     headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'same-origin',
+    signal,
   })
   await throwIfError(res)
   return parseBody<T>(res)
@@ -215,6 +216,22 @@ export interface DuplicateStatus {
   started_at?: string
 }
 
+export interface DescriptionBatchItem {
+  item_id: number
+  asset_tag: string
+  primary_image_id?: number
+  status: 'pending' | 'generating' | 'done' | 'error'
+  description?: string
+  error?: string
+}
+
+export interface DescriptionBatchStatus {
+  exists: boolean
+  running: boolean
+  started_at?: string
+  items: DescriptionBatchItem[]
+}
+
 export interface DuplicateGroupMember {
   item_id: number
   asset_tag: string
@@ -297,11 +314,12 @@ export const api = {
     form.set('image', image, 'capture.jpg')
     return upload<CapturePreviewResponse>('/api/capture/preview', form)
   },
-  captureApply: (image: Blob, assetTag: string, description: string, setItemDescription: boolean) => {
+  captureApply: (image: Blob, assetTag: string, description: string, setItemDescription: boolean, captureId: string) => {
     const form = new FormData()
     form.set('image', image, 'capture.jpg')
     form.set('asset_tag', assetTag)
     form.set('description', description)
+    form.set('capture_id', captureId)
     if (setItemDescription) form.set('set_item_description', '1')
     return upload<CaptureResponse>('/api/capture/apply', form)
   },
@@ -320,7 +338,7 @@ export const api = {
       location_tag: locationTag,
       asset_tags: assetTags,
     }),
-  search: (filters: SearchFilters) => {
+  search: (filters: SearchFilters, signal?: AbortSignal) => {
     const params = new URLSearchParams()
     if (filters.q) params.set('q', filters.q)
     if (filters.noDescription) params.set('no_description', '1')
@@ -330,7 +348,7 @@ export const api = {
     for (const labelId of filters.labelIds ?? []) params.append('label_id', String(labelId))
     for (const labelId of filters.locationLabelIds ?? []) params.append('location_label_id', String(labelId))
     const qs = params.toString()
-    return request<{ items: ItemSummary[] }>('GET', '/api/search' + (qs ? `?${qs}` : ''))
+    return request<{ items: ItemSummary[] }>('GET', '/api/search' + (qs ? `?${qs}` : ''), undefined, signal)
   },
   bulkDelete: (itemIds: number[]) => request<{ deleted: number }>('POST', '/api/items/bulk-delete', { item_ids: itemIds }),
   getItem: (id: number) => request<ItemDetail>('GET', `/api/items/${id}`),
@@ -342,11 +360,16 @@ export const api = {
     request<ItemDetail>('DELETE', `/api/items/${itemId}/images/${imageId}`),
   regenerateItemDescription: (itemId: number, hint?: string) =>
     request<ItemDetail>('POST', `/api/items/${itemId}/regenerate-description`, hint ? { hint } : undefined),
+  descriptionBatchStatus: () => request<DescriptionBatchStatus>('GET', '/api/descriptions/batch/status'),
+  startDescriptionBatch: (items: { item_id: number; hint?: string }[]) =>
+    request<DescriptionBatchStatus>('POST', '/api/descriptions/batch', { items }),
   listLocations: () => request<{ locations: Location[] }>('GET', '/api/locations'),
   updateLocation: (id: number, description: string) =>
     request<{ location: Location }>('PUT', `/api/locations/${id}`, { description }),
-  getLocationItems: (id: number) => request<{ items: LocationItem[] }>('GET', `/api/locations/${id}/items`),
-  getLocationActivity: (id: number) => request<{ activity: ActivityEntry[] }>('GET', `/api/locations/${id}/activity`),
+  getLocationItems: (id: number, signal?: AbortSignal) =>
+    request<{ items: LocationItem[] }>('GET', `/api/locations/${id}/items`, undefined, signal),
+  getLocationActivity: (id: number, signal?: AbortSignal) =>
+    request<{ activity: ActivityEntry[] }>('GET', `/api/locations/${id}/activity`, undefined, signal),
   moveItemToLocation: (locationId: number, itemId: number) =>
     request<{ item_id: number; location_id: number }>('POST', `/api/locations/${locationId}/move-item`, { item_id: itemId }),
   setLocationLabels: (locationId: number, labelIds: number[]) =>

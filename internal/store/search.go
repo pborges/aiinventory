@@ -49,8 +49,9 @@ const itemSummarySelect = `
 func (s *Store) SearchItems(ctx context.Context, params SearchParams) ([]ItemSummary, error) {
 	var filterArgs []any
 	filterClause := buildFilterClause(params, &filterArgs)
+	ftsQuery := literalFTSQuery(params.Query)
 
-	if params.Query == "" {
+	if ftsQuery == "" {
 		rows, err := s.db.QueryContext(ctx, itemSummarySelect+" WHERE 1=1"+filterClause+" ORDER BY items.asset_tag", filterArgs...)
 		if err != nil {
 			return nil, fmt.Errorf("search items: %w", err)
@@ -64,7 +65,7 @@ func (s *Store) SearchItems(ctx context.Context, params SearchParams) ([]ItemSum
 	}
 
 	// item-level hits, ranked by relevance
-	itemArgs := append([]any{params.Query}, filterArgs...)
+	itemArgs := append([]any{ftsQuery}, filterArgs...)
 	itemRows, err := s.db.QueryContext(ctx, itemSummarySelect+`
 		JOIN items_fts ON items_fts.rowid = items.id
 		WHERE items_fts MATCH ?`+filterClause+`
@@ -84,7 +85,7 @@ func (s *Store) SearchItems(ctx context.Context, params SearchParams) ([]ItemSum
 	}
 
 	// image-level-only hits (per-image notes not yet folded into the item description)
-	imageArgs := append([]any{params.Query}, filterArgs...)
+	imageArgs := append([]any{ftsQuery}, filterArgs...)
 	imageRows, err := s.db.QueryContext(ctx, `
 		SELECT DISTINCT `+itemSummaryColumns+`
 		FROM items
@@ -109,6 +110,19 @@ func (s *Store) SearchItems(ctx context.Context, params SearchParams) ([]ItemSum
 		}
 	}
 	return attachLabels(ctx, s, results)
+}
+
+// literalFTSQuery turns the UI's free text into an FTS5 expression without
+// exposing FTS operators to the user. Quoting each whitespace-delimited term
+// preserves useful punctuation such as XR-500 and S/N while ANDing terms in
+// the same way users expect from an inventory search box.
+func literalFTSQuery(input string) string {
+	fields := strings.Fields(input)
+	quoted := make([]string, 0, len(fields))
+	for _, field := range fields {
+		quoted = append(quoted, `"`+strings.ReplaceAll(field, `"`, `""`)+`"`)
+	}
+	return strings.Join(quoted, " AND ")
 }
 
 // attachLabels batch-loads labels for every result in one query and

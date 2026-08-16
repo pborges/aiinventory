@@ -17,13 +17,13 @@ The camera view hugs the top of the header — a square viewport sized to leave 
 A **mode toggle** directly under the viewfinder — **📷 Ingest item** vs **🗺️ Locate items** — picks which flow a capture runs. Earlier versions tried to guess (asset-tag flow first, falling back to location-reconciliation if nothing was found), but asset tags and location tags are both just a handful of uppercase letters on a white sticker, and letting Gemini guess which one it was looking for was unreliable in practice. The toggle is disabled mid-capture and stays on whatever you last picked across shots, since scanning a run of the same kind of label back-to-back is the common case.
 
 1. **Capture** — tapping the button freezes the viewfinder on the shot just taken (the live `<video>` stream stays running underneath; the frozen frame is just laid on top) and the button becomes a spinner while the frame is analyzed.
-2. **Analyze (preview)** — the frame is resized/compressed client-side to a bounded max dimension *before* it goes anywhere, then uploaded to a preview endpoint that asks Gemini (pinned to `temperature=0`/`topK=1`, since this is a fixed-fact read rather than open-ended generation) to look for:
+2. **Analyze (preview)** — the frame is resized/compressed client-side to a bounded max dimension *before* it goes anywhere, then uploaded to a preview endpoint that asks Gemini to look for:
    - **An asset tag** — a 4-character, uppercase-alpha-only code printed as black text on a white label (e.g. `ZKEI`).
    - **The item itself** — Gemini attempts to identify what the item is, calling out a part's generic type alongside its part number where relevant (e.g. noting `ATF22V10C` is a PLD, `W24512AK` is static RAM), and transcribes any visible serial numbers, part numbers, or other identifying text. Descriptions deliberately never mention quantity or how items are arranged (a bin holding a dozen identical connectors is still described as one connector, not "several loosely packed connectors") — the asset tag identifies an item *type*, not a specific physical count.
    - Analyzing never writes anything by itself.
 3. **Validate & resolve the tag** — Gemini's JSON schema alone doesn't enforce the tag's shape, so a well-formed-but-garbled read (wrong letter count, a stray digit, lowercase) is deterministically rejected before it ever reaches the review screen. A shape-valid read is then checked against the **asset-tag registry** (every asset tag ever accepted, plus anything pre-registered in [Settings](#7-settings-desktop)): an exact match is used as-is, a read that's a single letter off from exactly one registered tag is offered as a pre-selected correction, and anything more ambiguous or with no close match makes the operator pick a candidate or type the tag by hand — nothing Gemini reads is ever silently substituted.
 4. **Review** — if a tag was resolved, a result card shows the tag, whether accepting will add a new item or a new photo to an existing one, and the short per-image description Gemini read off the photo next to a **Desc** checkbox (checked by default) — this per-image note is *always* saved on Accept regardless of the checkbox; checking it additionally copies that same text onto the item's own description, overwriting whatever was there before. Two buttons replace the capture button: **Cancel** (✕, discards the photo, no server write, camera returns live) and **Accept** (✓, commits it).
-5. **Accept (apply)** — accepting re-uploads the same photo to an apply endpoint along with the resolved tag, the per-image description, and whether the Desc checkbox was on. This does the actual write (create-or-append, plus the item-description copy if requested) and is trusted to echo back what the client showed rather than re-calling Gemini. On success the view clears completely and returns straight to a live, ready-to-shoot camera — no lingering confirmation text to dismiss before the next shot. On failure, the frozen frame and an error message stay up until acknowledged.
+5. **Accept (apply)** — accepting re-uploads the same photo to an apply endpoint along with the resolved tag, the per-image description, whether the Desc checkbox was on, and a per-shot idempotency key. The item, tag registration, image, optional description update, and activity row are committed in one transaction; retrying the same accepted shot returns the original result instead of inserting a duplicate photo. On success the view clears completely and returns straight to a live, ready-to-shoot camera — no lingering confirmation text to dismiss before the next shot. On failure, the frozen frame and an error message stay up until acknowledged.
 6. **No tag found** — if the frame contains no asset tag, the camera shows a "no asset tag found" message and a single button to clear and try again (switch to **Locate items** first if the frame actually has a location tag instead).
 
 | Frame contains (Ingest item mode) | Result on Accept |
@@ -83,7 +83,7 @@ On mobile, search leans toward *finding*, not maintaining: type-ahead results re
 On desktop, results are selectable (with select-all), and bulk actions apply to the current selection:
 
 - **Delete** selected items
-- **Regenerate description** — opens a **live-progress modal** listing every selected item (with its current thumbnail) and kicks off a description-regeneration batch on the server. The batch runs detached from the request that started it (a background goroutine, not tied to the HTTP request's lifetime) as an in-memory, mutex-guarded singleton — the same "one job at a time, tracked in the server process, not the database" pattern as the [duplicate finder](#5-duplicate-finder-desktop) — so it keeps running and reporting progress even if the modal is closed or the page is refreshed. The modal polls a status endpoint roughly once a second and updates each row's status (pending/generating/done/error) and description as results come in. Each row also has its own optional **hint** text box (e.g. "blue enclosure") and an individual **Regenerate** button to redo just that one item's description on demand, independent of the batch.
+- **Regenerate description** — opens a **live-progress modal** listing every selected item (with its current thumbnail) and kicks off a description-regeneration batch on the server. The batch runs detached from the request that started it (a background goroutine, not tied to the HTTP request's lifetime) as an in-memory, mutex-guarded job scoped to that user — one active job per user, with status visible only to its owner — so it keeps running and reporting progress even if the modal is closed or the page is refreshed. The modal polls a status endpoint roughly once a second and updates each row's status (pending/generating/done/error) and description as results come in. Each row also has its own optional **hint** text box (e.g. "blue enclosure") and an individual **Regenerate** button to redo just that one item's description on demand, independent of the batch.
 
 Gemini reviews all per-image descriptions attached to an item's photos and consolidates them into one concise item description, explicitly preserving any serial/part numbers found and never inventing a quantity or count.
 
@@ -163,6 +163,7 @@ A few notable design decisions:
 
 - **Primary image:** no separate "primary image" reference — the lowest-sorted image for an item is its primary image, and the carousel is drag-and-drop reorderable.
 - **Delete:** hard delete, cascading to an item's images — deliberate, so freed asset tags can be reused. No undo/trash.
+- **Mutation atomicity:** capture, item/image deletion, description updates, and manual moves commit their data and activity-log writes in one SQLite transaction. Bulk deletion is all-or-nothing.
 - **Duplicate-run concurrency:** kept out of the database entirely — "is a run active" lives in an in-memory, mutex-guarded singleton in the server process. A crash mid-run just loses that attempt; nothing gets stuck, and a finished-run row is written only once the run completes.
 - **Tag vs. label naming:** "tag" is reserved for the physical, OCR-read identifiers (asset tags, location tags); the color-coded, human-assigned pool is called a "label" instead, so the two concepts don't collide in conversation or code.
 - **OCR trust:** raw Gemini reads are never trusted directly — a deterministic shape check plus the registered-tag allow-list catches malformed and misread tags before they can create phantom items or corrupt a reconciliation diff.
@@ -215,6 +216,8 @@ JOIN images_fts ON images_fts.rowid = images.id
 WHERE images_fts MATCH ?;
 ```
 
+Free-text terms are quoted before being passed to `MATCH`, so inventory identifiers containing FTS syntax characters (for example `XR-500` or `S/N`) remain literal searches instead of malformed FTS expressions.
+
 `bm25()` gives relevance ranking on the item-level query for free. Default tokenizer (`unicode61`) is fine for this content; `tokenize='porter unicode61'` is available later if stemming (e.g. "drill" matching "drills") turns out to matter.
 
 ## Tech stack
@@ -222,9 +225,10 @@ WHERE images_fts MATCH ?;
 - **Backend:** Go, serving a JSON API and the built frontend as static assets
 - **Frontend:** Preact + TypeScript, built with `pnpm`
 - **Database:** embedded SQLite via [`modernc.org/sqlite`](https://gitlab.com/cznic/sqlite), a pure-Go driver — deliberately **no cgo**, so builds/cross-compiles stay simple (no C toolchain needed) and there's no external DB server to run. [Full-text search](#full-text-search) uses SQLite's FTS5 extension, which this driver compiles in by default.
-- **Images:** resized/compressed client-side to a bounded max dimension at capture time, before upload — the same optimized bytes are sent to Gemini for analysis and stored as blobs directly in SQLite (no separate object storage, no full-resolution originals). This keeps phone uploads small and keeps Gemini's per-request image tokens (and therefore cost/latency) down, while staying sharp enough for it to read a 4-character tag reliably.
+- **Images:** resized/compressed client-side before upload, then size/dimension/format-validated and re-encoded as JPEG by the server before Gemini or SQLite sees them. Image responses are served with MIME sniffing disabled. This keeps uploads and AI cost bounded while preventing user-supplied active content from being stored under a trusted same-origin URL.
 - **AI:** Google Gemini (vision) for tag/description/OCR extraction from captured frames — model and per-request-type prompts are configurable at runtime via [Settings](#7-settings-desktop)
-- **TLS:** optional self-signed certificate, generated and served at startup via an env var — convenient for camera access over HTTPS on a local network (iOS requires a secure context for camera capture on non-localhost origins)
+- **HTTP:** request-header/read/write/idle timeouts, bounded JSON/multipart bodies, strict JSON decoding, and per-client rate limits on authentication and AI-heavy endpoints.
+- **TLS:** optional self-signed certificate, generated and served at startup via an env var — convenient for camera access over HTTPS on a local network (iOS requires a secure context for camera capture on non-localhost origins). TLS is restricted to version 1.2 or newer.
 
 ## UI: mobile vs. desktop
 
@@ -268,6 +272,7 @@ Configured via environment variables, except the Gemini API key — that lives i
 | `DB_PATH` | Path to the SQLite database file | `./aiinventory.db` |
 | `TLS_ENABLED` | Serve HTTPS with a self-signed certificate | `false` |
 | `SESSION_SECRET` | Key used to cryptographically sign session cookies, so the server can tell a login cookie is genuine rather than forged by a client. Optional — if unset, a random value is generated on first boot and persisted in the `settings` table, so restarts keep working without you managing this by hand. Only set it explicitly if you want sessions to survive a fresh/replaced database. | auto-generated |
+| `TRUST_PROXY_HEADERS` | Use `X-Forwarded-For`/`X-Real-IP` for per-client rate limits. Enable only behind a trusted reverse proxy that strips incoming forwarding headers and supplies its own. | `false` |
 
 There's also one CLI flag, for debugging OCR misreads rather than everyday deployment:
 

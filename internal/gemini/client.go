@@ -166,20 +166,28 @@ func (g *GenAIClient) DetectDuplicates(ctx context.Context, model, prompt string
 func (g *GenAIClient) generateJSON(ctx context.Context, model string, schema *genai.Schema, out any, parts ...*genai.Part) error {
 	content := genai.NewContentFromParts(parts, genai.RoleUser)
 
-	resp, err := g.client.Models.GenerateContent(ctx, model, []*genai.Content{content}, &genai.GenerateContentConfig{
-		ResponseMIMEType: "application/json",
-		ResponseSchema:   schema,
-		// These calls read fixed facts off a photo (a tag, a code) or
-		// consolidate existing text — never open-ended generation — so
-		// sampling randomness only adds hallucination risk with no upside.
-		Temperature: genai.Ptr[float32](0),
-		TopK:        genai.Ptr[float32](1),
-	})
+	resp, err := g.client.Models.GenerateContent(ctx, model, []*genai.Content{content}, generationConfig(model, schema))
 	if err != nil {
 		return fmt.Errorf("gemini: generate content: %w", err)
 	}
 
 	return parseJSONResponse(resp.Text(), out)
+}
+
+func generationConfig(model string, schema *genai.Schema) *genai.GenerateContentConfig {
+	config := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		ResponseSchema:   schema,
+	}
+	// Gemini 1.x/2.x accept deterministic sampling controls. Gemini 3.x
+	// models are optimized for their defaults, while 3.6+ deprecates these
+	// fields entirely. Unknown aliases also keep the safe modern defaults.
+	model = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(model)), "models/")
+	if strings.HasPrefix(model, "gemini-1.") || strings.HasPrefix(model, "gemini-2.") {
+		config.Temperature = genai.Ptr(float32(0))
+		config.TopK = genai.Ptr(float32(1))
+	}
+	return config
 }
 
 // parseJSONResponse decodes a model's structured-output text into out. Kept

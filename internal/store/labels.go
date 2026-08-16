@@ -105,21 +105,16 @@ func (s *Store) DeleteLabel(ctx context.Context, id int64) error {
 	return nil
 }
 
-// SetItemLabels replaces itemID's full set of labels with labelIDs (delete-
-// then-insert in one transaction), mirroring ReorderImages' "send the whole
-// desired state" semantics (see internal/store/images.go).
-func (s *Store) SetItemLabels(ctx context.Context, itemID int64, labelIDs []int64) error {
-	return s.withTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM item_labels WHERE item_id = ?`, itemID); err != nil {
-			return fmt.Errorf("clear item labels: %w", err)
+func replaceItemLabelsTx(ctx context.Context, tx *sql.Tx, itemID int64, labelIDs []int64) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM item_labels WHERE item_id = ?`, itemID); err != nil {
+		return fmt.Errorf("clear item labels: %w", err)
+	}
+	for _, labelID := range labelIDs {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO item_labels (item_id, label_id) VALUES (?, ?)`, itemID, labelID); err != nil {
+			return fmt.Errorf("set item label %d: %w", labelID, err)
 		}
-		for _, labelID := range labelIDs {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO item_labels (item_id, label_id) VALUES (?, ?)`, itemID, labelID); err != nil {
-				return fmt.Errorf("set item label %d: %w", labelID, err)
-			}
-		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // ListLabelsByItem returns one item's labels, ordered by name.

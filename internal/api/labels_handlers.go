@@ -58,8 +58,7 @@ func (req labelRequest) validate() string {
 // handleCreateLabel creates a new label from the Settings label-management form.
 func (s *Server) handleCreateLabel(w http.ResponseWriter, r *http.Request) {
 	var req labelRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if msg := req.validate(); msg != "" {
@@ -87,8 +86,7 @@ func (s *Server) handleUpdateLabel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req labelRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if msg := req.validate(); msg != "" {
@@ -155,17 +153,16 @@ func (s *Server) handleSetItemLabels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req setItemLabelsRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 
 	ctx := r.Context()
-	if err := s.store.SetItemLabels(ctx, id, req.LabelIDs); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if err := s.store.LogActivity(ctx, user.ID, domain.ActivityItemLabelsUpdated, &id, nil, ""); err != nil {
+	if err := s.store.SetItemLabelsWithActivity(ctx, user.ID, id, req.LabelIDs); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}

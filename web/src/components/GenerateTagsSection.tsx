@@ -98,6 +98,7 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
   const [cutAirAssist, setCutAirAssist] = useState(true)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const generationRef = useRef(0)
 
   const [sheet, setSheet] = useState<TagSheetResponse | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -206,17 +207,18 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
   }
 
   async function regenerate(opts?: { reuseCodes?: boolean }) {
+    const generation = ++generationRef.current
     setBusy(true)
     setError(null)
     setStatus(null)
     try {
       const codes = opts?.reuseCodes ? sheet?.codes : undefined
       const resp = await generate(rows, cols, padding, cutSettingsPayload(), codes)
-      setSheet(resp)
+      if (generation === generationRef.current) setSheet(resp)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to generate preview')
+      if (generation === generationRef.current) setError(err instanceof ApiError ? err.message : 'Failed to generate preview')
     } finally {
-      setBusy(false)
+      if (generation === generationRef.current) setBusy(false)
     }
   }
 
@@ -231,6 +233,7 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
       setError('Choose a .txt file first')
       return
     }
+    const generation = ++generationRef.current
     setBusy(true)
     setError(null)
     setStatus(null)
@@ -252,13 +255,14 @@ export function GenerateTagsSection({ title, generate, register, getSettings, sa
         return
       }
       const resp = await generate(rows, cols, padding, cutSettingsPayload(), codes)
+      if (generation !== generationRef.current) return
       setSheet(resp)
       setStatus(`Loaded ${resp.codes.length} code${resp.codes.length === 1 ? '' : 's'} from ${file.name}.`)
       if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load codes')
+      if (generation === generationRef.current) setError(err instanceof ApiError ? err.message : 'Failed to load codes')
     } finally {
-      setBusy(false)
+      if (generation === generationRef.current) setBusy(false)
     }
   }
 

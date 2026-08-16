@@ -36,7 +36,8 @@ func (s *Server) handleDuplicatesStatus(w http.ResponseWriter, r *http.Request) 
 // independent of this request, since the request's context is cancelled
 // the moment this handler returns.
 func (s *Server) handleStartDuplicateRun(w http.ResponseWriter, r *http.Request) {
-	if s.geminiClient() == nil {
+	client := s.geminiClient()
+	if client == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (configure a Gemini API key in Settings)")
 		return
 	}
@@ -59,7 +60,6 @@ func (s *Server) handleStartDuplicateRun(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	client := s.geminiClient()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
@@ -148,8 +148,7 @@ func (s *Server) handleMergeDuplicateGroup(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var req mergeDuplicateGroupRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 

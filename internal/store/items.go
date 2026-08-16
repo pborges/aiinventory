@@ -36,6 +36,10 @@ func (s *Store) GetItemByAssetTag(ctx context.Context, assetTag string) (domain.
 }
 
 func (s *Store) scanItem(row *sql.Row) (domain.Item, error) {
+	return scanItemRow(row)
+}
+
+func scanItemRow(row rowScanner) (domain.Item, error) {
 	var it domain.Item
 	var description sql.NullString
 	var locationID sql.NullInt64
@@ -53,35 +57,4 @@ func (s *Store) scanItem(row *sql.Row) (domain.Item, error) {
 	it.CreatedAt, _ = time.Parse(time.DateTime, createdAt)
 	it.UpdatedAt, _ = time.Parse(time.DateTime, updatedAt)
 	return it, nil
-}
-
-func (s *Store) UpdateItemDescription(ctx context.Context, id int64, description string) error {
-	res, err := s.db.ExecContext(ctx, `
-		UPDATE items SET description = ?, updated_at = datetime('now') WHERE id = ?`, description, id)
-	if err != nil {
-		return fmt.Errorf("update item description: %w", err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-func (s *Store) DeleteItem(ctx context.Context, id int64) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM items WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("delete item: %w", err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return ErrNotFound
-	}
-	return nil
 }

@@ -1,10 +1,10 @@
-import { useState } from 'preact/hooks'
-import { api, ApiError, type ItemSummary } from '../api/client'
-
-// How many /api/items/{id}/regenerate-description requests are in flight at
-// once — a small worker pool over the item list, not one request per item
-// at a time and not all of them at once.
-const CONCURRENCY = 3
+import { useEffect, useRef, useState } from 'preact/hooks'
+import {
+  api,
+  ApiError,
+  type DescriptionBatchStatus,
+  type ItemSummary,
+} from '../api/client'
 
 type RowStatus = 'pending' | 'generating' | 'done' | 'error'
 
@@ -23,22 +23,17 @@ interface Props {
   onComplete: () => void
 }
 
-/**
- * Live-progress viewer for the Search view's bulk "Generate description"
- * action. Opens with a hint box per item and waits for "Generate" before
- * doing anything — that click dispatches a small worker pool of individual
- * POST /api/items/{id}/regenerate-description requests (CONCURRENCY at a
- * time), each request's own response updating that row directly. No
- * server-side batch/job to poll: this all lives in the browser tab for as
- * long as the modal stays open. Each row also has its own "Regenerate"
- * button for redoing just that one item after the fact, via the same helper.
- */
+const POLL_MS = 750
+
+/** Live progress for the server-owned description batch. The job survives
+ * closing or refreshing the tab; mounting the modal reconnects to a running
+ * job and polling only observes its state. */
 export function GenerateDescriptionsModal({ items, onClose, onComplete }: Props) {
   const [rows, setRows] = useState<Row[]>(
-    items.map((it) => ({
-      itemId: it.id,
-      assetTag: it.asset_tag,
-      primaryImageId: it.primary_image_id,
+    items.map((item) => ({
+      itemId: item.id,
+      assetTag: item.asset_tag,
+      primaryImageId: item.primary_image_id,
       status: 'pending',
       description: '',
       error: '',
@@ -47,53 +42,129 @@ export function GenerateDescriptionsModal({ items, onClose, onComplete }: Props)
   const [hints, setHints] = useState<Record<number, string>>({})
   const [individuallyBusy, setIndividuallyBusy] = useState<Set<number>>(new Set())
   const [started, setStarted] = useState(false)
+  const [starting, setStarting] = useState(false)
   const [running, setRunning] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+  const completionNotifiedRef = useRef(false)
+  const manualStartRef = useRef(false)
+  const startLockRef = useRef(false)
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
 
-  async function runItem(itemId: number) {
-    setRows((prev) => prev.map((r) => (r.itemId === itemId ? { ...r, status: 'generating', error: '' } : r)))
-    try {
-      const updated = await api.regenerateItemDescription(itemId, hints[itemId] || undefined)
-      setRows((prev) =>
-        prev.map((r) => (r.itemId === itemId ? { ...r, status: 'done', description: updated.description, error: '' } : r)),
-      )
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed'
-      setRows((prev) => prev.map((r) => (r.itemId === itemId ? { ...r, status: 'error', error: message } : r)))
-    }
+  function applyStatus(status: DescriptionBatchStatus) {
+    setRows(status.items.map((item) => ({
+      itemId: item.item_id,
+      assetTag: item.asset_tag,
+      primaryImageId: item.primary_image_id,
+      status: item.status,
+      description: item.description ?? '',
+      error: item.error ?? '',
+    })))
+    setStarted(status.exists)
+    setRunning(status.running)
   }
 
-  async function onGenerateAll() {
-    setStarted(true)
-    setRunning(true)
+  function notifyComplete() {
+    if (completionNotifiedRef.current) return
+    completionNotifiedRef.current = true
+    onCompleteRef.current()
+  }
 
-    let nextIndex = 0
-    async function worker() {
-      while (nextIndex < items.length) {
-        const item = items[nextIndex++]
-        await runItem(item.id)
-      }
+  useEffect(() => {
+    let cancelled = false
+    api.descriptionBatchStatus()
+      .then((status) => {
+        if (cancelled || manualStartRef.current || !status.running) return
+        applyStatus(status)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
     }
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-    setRunning(false)
-    onComplete()
+  // Exactly one polling chain exists while a server batch is running. The
+  // effect cleanup cancels its timer whenever running changes or the modal
+  // unmounts, and onComplete is read through a ref so it is never stale.
+  useEffect(() => {
+    if (!running) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    async function poll() {
+      try {
+        const status = await api.descriptionBatchStatus()
+        if (cancelled) return
+        applyStatus(status)
+        if (!status.running) {
+          notifyComplete()
+          return
+        }
+      } catch {
+        // A transient status failure should not abandon a server-side job.
+      }
+      if (!cancelled) timer = setTimeout(poll, POLL_MS)
+    }
+    timer = setTimeout(poll, POLL_MS)
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running])
+
+  async function onGenerateAll() {
+    if (startLockRef.current) return
+    startLockRef.current = true
+    manualStartRef.current = true
+    setStartError(null)
+    setStarted(true)
+    setStarting(true)
+    completionNotifiedRef.current = false
+    try {
+      const status = await api.startDescriptionBatch(
+        items.map((item) => ({ item_id: item.id, hint: hints[item.id]?.trim() || undefined })),
+      )
+      applyStatus(status)
+      if (!status.running) notifyComplete()
+    } catch (err) {
+      setStarted(false)
+      setRunning(false)
+      setStartError(err instanceof ApiError ? err.message : 'Failed to start description generation')
+      startLockRef.current = false
+      manualStartRef.current = false
+    } finally {
+      setStarting(false)
+    }
   }
 
   async function onRegenerateOne(itemId: number) {
-    setIndividuallyBusy((prev) => new Set(prev).add(itemId))
+    setIndividuallyBusy((previous) => new Set(previous).add(itemId))
+    setRows((previous) => previous.map((row) => (row.itemId === itemId ? { ...row, status: 'generating', error: '' } : row)))
     try {
-      await runItem(itemId)
+      const updated = await api.regenerateItemDescription(itemId, hints[itemId] || undefined)
+      setRows((previous) =>
+        previous.map((row) =>
+          row.itemId === itemId ? { ...row, status: 'done', description: updated.description, error: '' } : row,
+        ),
+      )
+      onCompleteRef.current()
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed'
+      setRows((previous) =>
+        previous.map((row) => (row.itemId === itemId ? { ...row, status: 'error', error: message } : row)),
+      )
     } finally {
-      setIndividuallyBusy((prev) => {
-        const next = new Set(prev)
+      setIndividuallyBusy((previous) => {
+        const next = new Set(previous)
         next.delete(itemId)
         return next
       })
     }
   }
 
-  const doneCount = rows.filter((r) => r.status === 'done').length
-  const errorCount = rows.filter((r) => r.status === 'error').length
+  const doneCount = rows.filter((row) => row.status === 'done').length
+  const errorCount = rows.filter((row) => row.status === 'error').length
 
   return (
     <div class="modal-overlay">
@@ -101,9 +172,10 @@ export function GenerateDescriptionsModal({ items, onClose, onComplete }: Props)
         <h2>Generate descriptions</h2>
         <p class="generate-descriptions-progress">
           {started
-            ? `${running ? 'Working…' : 'Finished.'} ${doneCount}/${rows.length} done${errorCount > 0 ? `, ${errorCount} failed` : ''}.`
+            ? `${starting || running ? 'Working… You can safely close this window.' : 'Finished.'} ${doneCount}/${rows.length} done${errorCount > 0 ? `, ${errorCount} failed` : ''}.`
             : 'Add an optional hint per item, then Generate.'}
         </p>
+        {startError && <p class="capture-feedback capture-feedback-error">{startError}</p>}
 
         <ul class="generate-descriptions-list">
           {rows.map((row) => (
@@ -118,9 +190,7 @@ export function GenerateDescriptionsModal({ items, onClose, onComplete }: Props)
               <div class="generate-descriptions-row-body">
                 <div class="generate-descriptions-row-header">
                   <span class="generate-descriptions-tag">{row.assetTag}</span>
-                  <span class={`generate-descriptions-status generate-descriptions-status-${row.status}`}>
-                    {row.status}
-                  </span>
+                  <span class={`generate-descriptions-status generate-descriptions-status-${row.status}`}>{row.status}</span>
                 </div>
                 <p class="generate-descriptions-description">
                   {row.status === 'error' ? row.error : row.description || <em>—</em>}
@@ -131,12 +201,13 @@ export function GenerateDescriptionsModal({ items, onClose, onComplete }: Props)
                     class="generate-descriptions-hint"
                     placeholder={'Optional hint (e.g. "blue enclosure")'}
                     value={hints[row.itemId] ?? ''}
-                    onInput={(e) => setHints({ ...hints, [row.itemId]: (e.target as HTMLInputElement).value })}
+                    disabled={starting || running}
+                    onInput={(event) => setHints({ ...hints, [row.itemId]: (event.target as HTMLInputElement).value })}
                   />
                   <button
                     type="button"
                     onClick={() => onRegenerateOne(row.itemId)}
-                    disabled={individuallyBusy.has(row.itemId)}
+                    disabled={starting || running || individuallyBusy.has(row.itemId)}
                   >
                     {individuallyBusy.has(row.itemId) ? 'Regenerating…' : 'Regenerate'}
                   </button>
@@ -148,17 +219,11 @@ export function GenerateDescriptionsModal({ items, onClose, onComplete }: Props)
 
         <div class="modal-actions">
           {started ? (
-            <button type="button" onClick={onClose}>
-              Close
-            </button>
+            <button type="button" onClick={onClose}>Close</button>
           ) : (
             <>
-              <button type="button" class="btn-primary" onClick={onGenerateAll}>
-                Generate
-              </button>
-              <button type="button" onClick={onClose}>
-                Cancel
-              </button>
+              <button type="button" class="btn-primary" onClick={onGenerateAll}>Generate</button>
+              <button type="button" onClick={onClose}>Cancel</button>
             </>
           )}
         </div>

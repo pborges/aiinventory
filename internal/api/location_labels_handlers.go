@@ -25,8 +25,7 @@ func (s *Server) handleListLocationLabels(w http.ResponseWriter, r *http.Request
 // location-label management form.
 func (s *Server) handleCreateLocationLabel(w http.ResponseWriter, r *http.Request) {
 	var req labelRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if msg := req.validate(); msg != "" {
@@ -54,8 +53,7 @@ func (s *Server) handleUpdateLocationLabel(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	var req labelRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if msg := req.validate(); msg != "" {

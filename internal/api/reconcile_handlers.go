@@ -1,7 +1,6 @@
 package api
 
 import (
-	"io"
 	"net/http"
 	"regexp"
 
@@ -113,7 +112,8 @@ func toReconcileDiffResponse(diff domain.ReconcileDiff, assetTags []string) reco
 // and the resulting diff is returned for the user to approve — nothing is
 // written yet.
 func (s *Server) handleReconcilePreview(w http.ResponseWriter, r *http.Request) {
-	if s.geminiClient() == nil {
+	client := s.geminiClient()
+	if client == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI features are disabled (configure a Gemini API key in Settings)")
 		return
 	}
@@ -122,25 +122,10 @@ func (s *Server) handleReconcilePreview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid multipart form")
-		return
-	}
-	file, header, err := r.FormFile("image")
+	data, contentType, err := readUploadedImage(w, r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "missing image file")
+		writeImageUploadError(w, err)
 		return
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(io.LimitReader(file, maxUploadBytes))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "failed to read image")
-		return
-	}
-	contentType := header.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "image/jpeg"
 	}
 
 	ctx := r.Context()
@@ -150,7 +135,7 @@ func (s *Server) handleReconcilePreview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	analysis, err := s.geminiClient().AnalyzeReconciliation(ctx, model, prompt, data, contentType)
+	analysis, err := client.AnalyzeReconciliation(ctx, model, prompt, data, contentType)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "gemini request failed: "+err.Error())
 		return
@@ -249,8 +234,7 @@ func (s *Server) handleReconcileDiff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req applyReconcileRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if !locationTagPattern.MatchString(req.LocationTag) {
@@ -286,8 +270,7 @@ func (s *Server) handleReconcileApply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req applyReconcileRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	if !locationTagPattern.MatchString(req.LocationTag) {

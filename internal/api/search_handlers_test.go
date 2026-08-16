@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"image/jpeg"
 	"net/http"
 	"strconv"
 	"testing"
@@ -32,13 +33,20 @@ func TestSearchAndImageServing(t *testing.T) {
 		t.Fatal("expected a primary_image_id after one capture")
 	}
 
-	// the served image bytes match what was uploaded
+	// the served bytes are a canonical, decodable JPEG regardless of upload
+	// metadata or source encoding.
 	imgReq := doJSON(t, h, http.MethodGet, "/api/images/"+strconv.FormatInt(*searchResp.Items[0].PrimaryImageID, 10), nil, cookies)
 	if imgReq.Code != http.StatusOK {
 		t.Fatalf("image status = %d", imgReq.Code)
 	}
-	if imgReq.Body.String() != "photo-bytes" {
-		t.Fatalf("image bytes = %q, want photo-bytes", imgReq.Body.String())
+	if got := imgReq.Header().Get("Content-Type"); got != "image/jpeg" {
+		t.Fatalf("Content-Type = %q, want image/jpeg", got)
+	}
+	if got := imgReq.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+	if _, err := jpeg.Decode(imgReq.Body); err != nil {
+		t.Fatalf("served image is not a JPEG: %v", err)
 	}
 
 	// no-description filter excludes it once a description exists

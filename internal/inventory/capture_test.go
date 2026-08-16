@@ -73,9 +73,36 @@ func (f *fakeCaptureStore) UpdateItemDescription(_ context.Context, id int64, de
 	return store.ErrNotFound
 }
 
+func (f *fakeCaptureStore) ApplyCapture(ctx context.Context, userID int64, _ string, assetTag string, data []byte, contentType, description string, setItemDescription bool) (domain.Item, bool, error) {
+	item, err := f.GetItemByAssetTag(ctx, assetTag)
+	itemWasNew := false
+	if errors.Is(err, store.ErrNotFound) {
+		item, err = f.CreateItem(ctx, assetTag)
+		itemWasNew = true
+	}
+	if err != nil {
+		return domain.Item{}, false, err
+	}
+	f.RegisterAssetTag(ctx, assetTag)
+	_, err = f.AddImage(ctx, item.ID, data, contentType, description, userID)
+	if err != nil {
+		return domain.Item{}, false, err
+	}
+	if setItemDescription && description != "" {
+		f.UpdateItemDescription(ctx, item.ID, description)
+		item.Description = description
+	}
+	action := domain.ActivityImageAdded
+	if itemWasNew {
+		action = domain.ActivityItemCreated
+	}
+	f.LogActivity(ctx, userID, action, &item.ID, nil, "")
+	return item, itemWasNew, nil
+}
+
 func TestCaptureCreatesNewItem(t *testing.T) {
 	s := newFakeCaptureStore()
-	res, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", false)
+	res, err := Capture(context.Background(), s, 1, "", true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", false)
 	if err != nil {
 		t.Fatalf("Capture: %v", err)
 	}
@@ -92,12 +119,12 @@ func TestCaptureCreatesNewItem(t *testing.T) {
 
 func TestCaptureAppendsToExistingItem(t *testing.T) {
 	s := newFakeCaptureStore()
-	first, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg1"), "image/jpeg", "S/N 123", false)
+	first, err := Capture(context.Background(), s, 1, "", true, "ZKEI", []byte("jpeg1"), "image/jpeg", "S/N 123", false)
 	if err != nil {
 		t.Fatalf("first Capture: %v", err)
 	}
 
-	second, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg2"), "image/jpeg", "model XYZ", false)
+	second, err := Capture(context.Background(), s, 1, "", true, "ZKEI", []byte("jpeg2"), "image/jpeg", "model XYZ", false)
 	if err != nil {
 		t.Fatalf("second Capture: %v", err)
 	}
@@ -118,7 +145,7 @@ func TestCaptureAppendsToExistingItem(t *testing.T) {
 
 func TestCaptureSelfHealsRegistry(t *testing.T) {
 	s := newFakeCaptureStore()
-	if _, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", false); err != nil {
+	if _, err := Capture(context.Background(), s, 1, "", true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", false); err != nil {
 		t.Fatalf("Capture: %v", err)
 	}
 	if len(s.registeredTag) != 1 || s.registeredTag[0] != "ZKEI" {
@@ -128,7 +155,7 @@ func TestCaptureSelfHealsRegistry(t *testing.T) {
 
 func TestCaptureRejectsMissingAssetTag(t *testing.T) {
 	s := newFakeCaptureStore()
-	_, err := Capture(context.Background(), s, 1, false, "", []byte("jpeg"), "image/jpeg", "", false)
+	_, err := Capture(context.Background(), s, 1, "", false, "", []byte("jpeg"), "image/jpeg", "", false)
 	if !errors.Is(err, ErrNoAssetTag) {
 		t.Fatalf("err = %v, want ErrNoAssetTag", err)
 	}
@@ -139,7 +166,7 @@ func TestCaptureRejectsMissingAssetTag(t *testing.T) {
 
 func TestCaptureSetItemDescriptionPromotesImageNote(t *testing.T) {
 	s := newFakeCaptureStore()
-	res, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", true)
+	res, err := Capture(context.Background(), s, 1, "", true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", true)
 	if err != nil {
 		t.Fatalf("Capture: %v", err)
 	}
@@ -153,7 +180,7 @@ func TestCaptureSetItemDescriptionPromotesImageNote(t *testing.T) {
 
 func TestCaptureWithoutSetItemDescriptionLeavesItemDescriptionAlone(t *testing.T) {
 	s := newFakeCaptureStore()
-	res, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", false)
+	res, err := Capture(context.Background(), s, 1, "", true, "ZKEI", []byte("jpeg"), "image/jpeg", "S/N 123", false)
 	if err != nil {
 		t.Fatalf("Capture: %v", err)
 	}
@@ -164,13 +191,13 @@ func TestCaptureWithoutSetItemDescriptionLeavesItemDescriptionAlone(t *testing.T
 
 func TestCaptureSetItemDescriptionWithNoNotesDoesNotClearExisting(t *testing.T) {
 	s := newFakeCaptureStore()
-	if _, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg1"), "image/jpeg", "S/N 123", true); err != nil {
+	if _, err := Capture(context.Background(), s, 1, "", true, "ZKEI", []byte("jpeg1"), "image/jpeg", "S/N 123", true); err != nil {
 		t.Fatalf("first Capture: %v", err)
 	}
 
 	// A second photo of the same item with no readable notes, but the box
 	// still checked — must not blank out the description the first photo set.
-	res, err := Capture(context.Background(), s, 1, true, "ZKEI", []byte("jpeg2"), "image/jpeg", "", true)
+	res, err := Capture(context.Background(), s, 1, "", true, "ZKEI", []byte("jpeg2"), "image/jpeg", "", true)
 	if err != nil {
 		t.Fatalf("second Capture: %v", err)
 	}
