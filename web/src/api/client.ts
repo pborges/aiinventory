@@ -16,6 +16,16 @@ export class ApiError extends Error {
   }
 }
 
+let unauthorizedHandler: ((error: ApiError) => void) | null = null
+
+// setUnauthorizedHandler lets the auth state react to a rejected session
+// without making this low-level API client import the auth module (which
+// already depends on the client). There is one application-wide auth store,
+// so a single handler is sufficient.
+export function setUnauthorizedHandler(handler: (error: ApiError) => void) {
+  unauthorizedHandler = handler
+}
+
 async function throwIfError(res: Response): Promise<void> {
   if (res.ok) return
   let message = res.statusText
@@ -25,7 +35,9 @@ async function throwIfError(res: Response): Promise<void> {
   } catch {
     // response body wasn't JSON; fall back to statusText
   }
-  throw new ApiError(res.status, message)
+  const error = new ApiError(res.status, message)
+  if (res.status === 401) unauthorizedHandler?.(error)
+  throw error
 }
 
 // Some endpoints (e.g. the batch-kickoff 202 Accepted responses) return no
@@ -386,6 +398,8 @@ export const api = {
   listUsers: () => request<{ users: UserListItem[] }>('GET', '/api/users'),
   createUser: (username: string, password: string) =>
     request<{ user: User }>('POST', '/api/users', { username, password }),
+  changeMyPassword: (currentPassword: string, newPassword: string) =>
+    request<void>('PUT', '/api/users/me/password', { current_password: currentPassword, new_password: newPassword }),
   setUserEnabled: (id: number, enabled: boolean) => request<void>('PUT', `/api/users/${id}`, { enabled }),
   listItemLabels: () => request<{ labels: Label[] }>('GET', '/api/labels'),
   createItemLabel: (name: string, color: string) => request<{ label: Label }>('POST', '/api/labels', { name, color }),

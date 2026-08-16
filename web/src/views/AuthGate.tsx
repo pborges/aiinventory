@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { bootstrapNeeded, bootstrap, login } from '../state/auth'
+import { authError, bootstrapNeeded, bootstrap, login } from '../state/auth'
 import { ApiError } from '../api/client'
 import { Footer } from '../components/Footer'
 
@@ -13,6 +13,7 @@ export function AuthGate() {
   async function onSubmit(e: Event) {
     e.preventDefault()
     setError(null)
+    authError.value = null
     setSubmitting(true)
     try {
       if (isBootstrap) {
@@ -21,11 +22,17 @@ export function AuthGate() {
         await login(username, password)
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong')
+      if (err instanceof ApiError) {
+        setError(err.status === 401 ? 'Unauthorized' : err.message)
+      } else {
+        setError('Something went wrong')
+      }
     } finally {
       setSubmitting(false)
     }
   }
+
+  const displayedError = error ?? authError.value
 
   return (
     <div class="auth-gate">
@@ -57,7 +64,7 @@ export function AuthGate() {
             />
           </label>
 
-          {error && <p class="auth-error">{error}</p>}
+          {displayedError && <p class="auth-error">{displayedError}</p>}
 
           <button type="submit" class="btn-primary" disabled={submitting}>
             {isBootstrap ? 'Create account' : 'Sign in'}

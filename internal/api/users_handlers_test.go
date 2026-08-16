@@ -82,3 +82,51 @@ func TestUserManagementRequiresAuth(t *testing.T) {
 		t.Fatalf("status = %d, want 401", w.Code)
 	}
 }
+
+func TestChangeMyPassword(t *testing.T) {
+	h, cookies, _ := newTestServerWithGemini(t, nil)
+
+	wrongCurrent := doJSON(t, h, http.MethodPut, "/api/users/me/password", changePasswordRequest{
+		CurrentPassword: "wrongpassword",
+		NewPassword:     "newcorrecthorse",
+	}, cookies)
+	if wrongCurrent.Code != http.StatusForbidden {
+		t.Fatalf("wrong-current-password status = %d, body = %s", wrongCurrent.Code, wrongCurrent.Body.String())
+	}
+
+	tooShort := doJSON(t, h, http.MethodPut, "/api/users/me/password", changePasswordRequest{
+		CurrentPassword: "correcthorse",
+		NewPassword:     "short",
+	}, cookies)
+	if tooShort.Code != http.StatusBadRequest {
+		t.Fatalf("short-password status = %d, body = %s", tooShort.Code, tooShort.Body.String())
+	}
+
+	changed := doJSON(t, h, http.MethodPut, "/api/users/me/password", changePasswordRequest{
+		CurrentPassword: "correcthorse",
+		NewPassword:     "newcorrecthorse",
+	}, cookies)
+	if changed.Code != http.StatusNoContent {
+		t.Fatalf("change-password status = %d, body = %s", changed.Code, changed.Body.String())
+	}
+
+	oldLogin := doJSON(t, h, http.MethodPost, "/api/auth/login", credentials{Username: "alice", Password: "correcthorse"}, nil)
+	if oldLogin.Code != http.StatusUnauthorized {
+		t.Fatalf("old-password login status = %d, want 401", oldLogin.Code)
+	}
+	newLogin := doJSON(t, h, http.MethodPost, "/api/auth/login", credentials{Username: "alice", Password: "newcorrecthorse"}, nil)
+	if newLogin.Code != http.StatusOK {
+		t.Fatalf("new-password login status = %d, body = %s", newLogin.Code, newLogin.Body.String())
+	}
+}
+
+func TestChangeMyPasswordRequiresAuth(t *testing.T) {
+	h, _, _ := newTestServerWithGemini(t, nil)
+	w := doJSON(t, h, http.MethodPut, "/api/users/me/password", changePasswordRequest{
+		CurrentPassword: "correcthorse",
+		NewPassword:     "newcorrecthorse",
+	}, nil)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", w.Code)
+	}
+}

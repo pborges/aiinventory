@@ -140,6 +140,21 @@ func (s *Store) SetUserEnabled(ctx context.Context, id int64, enabled bool) erro
 	return nil
 }
 
+func (s *Store) SetUserPassword(ctx context.Context, id int64, passwordHash string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, passwordHash, id)
+	if err != nil {
+		return fmt.Errorf("set user password: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1

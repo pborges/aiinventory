@@ -106,6 +106,7 @@ func NewWithOptions(s *store.Store, codec *auth.Codec, geminiClient gemini.Clien
 
 	mux.Handle("GET /api/users", srv.requireAuth(srv.handleListUsers))
 	mux.Handle("POST /api/users", srv.requireAuth(srv.handleCreateUser))
+	mux.Handle("PUT /api/users/me/password", srv.requireAuth(srv.rateLimit(srv.authLimiter, srv.handleChangeMyPassword)))
 	mux.Handle("PUT /api/users/{id}", srv.requireAuth(srv.handleSetUserEnabled))
 
 	mux.Handle("GET /api/labels", srv.requireAuth(srv.handleListLabels))

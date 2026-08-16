@@ -1112,6 +1112,54 @@ a.capture-result-tag:hover {
   margin-top: 0;
 }
 
+.settings-password-card {
+  max-width: 34rem;
+  margin: 1.25rem 0 1.5rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+.settings-password-card h3 {
+  margin: 0;
+}
+
+.settings-password-card > p {
+  margin: 0.35rem 0 1rem;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.settings-password-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.settings-password-form label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+
+.settings-password-form input {
+  width: 100%;
+  padding: 0.5rem;
+  font: inherit;
+}
+
+.settings-password-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.settings-password-actions button {
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
 .settings-user-list {
   list-style: none;
   margin: 0 0 1rem;
@@ -2230,4 +2278,3 @@ button.label-chip:hover {
   gap: 0.35rem;
   font-size: 0.85rem;
 }
-

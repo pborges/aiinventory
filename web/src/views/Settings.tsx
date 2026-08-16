@@ -77,6 +77,12 @@ export function Settings(props: RouteProps) {
   const [newPassword, setNewPassword] = useState('')
   const [userError, setUserError] = useState<string | null>(null)
   const [userBusy, setUserBusy] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newOwnPassword, setNewOwnPassword] = useState('')
+  const [confirmOwnPassword, setConfirmOwnPassword] = useState('')
+  const [passwordBusy, setPasswordBusy] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordSaved, setPasswordSaved] = useState(false)
 
   // Bumped after a Generate-tags batch registration so each pane's
   // RegisteredTagsSection reloads its list — see refreshKey on that component.
@@ -183,6 +189,29 @@ export function Settings(props: RouteProps) {
       setUserError(err instanceof ApiError ? err.message : 'Failed to update user')
     } finally {
       setUserBusy(false)
+    }
+  }
+
+  async function onChangeMyPassword(e: Event) {
+    e.preventDefault()
+    setPasswordError(null)
+    setPasswordSaved(false)
+    if (newOwnPassword !== confirmOwnPassword) {
+      setPasswordError('New passwords do not match')
+      return
+    }
+
+    setPasswordBusy(true)
+    try {
+      await api.changeMyPassword(currentPassword, newOwnPassword)
+      setCurrentPassword('')
+      setNewOwnPassword('')
+      setConfirmOwnPassword('')
+      setPasswordSaved(true)
+    } catch (err) {
+      setPasswordError(err instanceof ApiError ? err.message : 'Failed to change password')
+    } finally {
+      setPasswordBusy(false)
     }
   }
 
@@ -294,6 +323,52 @@ export function Settings(props: RouteProps) {
                   <p class="settings-users-note">
                     No admin/non-admin distinction yet — any logged-in, enabled user can manage every account.
                   </p>
+
+                  <div class="settings-password-card">
+                    <h3>Change my password</h3>
+                    <p>Update the password for {currentUser.value?.username}.</p>
+                    <form class="settings-password-form" onSubmit={onChangeMyPassword}>
+                      <label>
+                        Current password
+                        <input
+                          type="password"
+                          autocomplete="current-password"
+                          value={currentPassword}
+                          onInput={(e) => setCurrentPassword((e.target as HTMLInputElement).value)}
+                          required
+                        />
+                      </label>
+                      <label>
+                        New password
+                        <input
+                          type="password"
+                          autocomplete="new-password"
+                          value={newOwnPassword}
+                          onInput={(e) => setNewOwnPassword((e.target as HTMLInputElement).value)}
+                          minLength={8}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Confirm new password
+                        <input
+                          type="password"
+                          autocomplete="new-password"
+                          value={confirmOwnPassword}
+                          onInput={(e) => setConfirmOwnPassword((e.target as HTMLInputElement).value)}
+                          minLength={8}
+                          required
+                        />
+                      </label>
+                      <div class="settings-password-actions">
+                        <button type="submit" class="btn-primary" disabled={passwordBusy}>
+                          {passwordBusy ? 'Changing…' : 'Change password'}
+                        </button>
+                        {passwordSaved && <span class="settings-status">Password changed</span>}
+                        {passwordError && <span class="settings-status settings-status-error">{passwordError}</span>}
+                      </div>
+                    </form>
+                  </div>
 
                   <ul class="settings-user-list">
                     {users === null && <li>Loading…</li>}
